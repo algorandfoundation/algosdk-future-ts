@@ -1,3 +1,9 @@
+# 0.11.0 - October 11th, 2026
+
+## Features
+
+- Add composer error transformers, and map ARC56 error messages in any `Composer` once an `ARC56AppClient` exists for the app.
+
 # 0.10.0 - October 10th, 2026
 
 ## Breaking Changes
