@@ -15,6 +15,9 @@ export type APIClientOpts = { token: string; host: string; port: string };
 export type GenerateAccountOpts = {
   fund?: bigint;
 };
+export type DispenserOpts = {
+  account?: "Wallet1" | "highestBalance";
+};
 
 interface KmdWalletsResponse {
   wallets: Array<{ id: string; name: string }>;
@@ -98,11 +101,31 @@ export class Localnet {
     });
   }
 
-  async dispenser() {
-    const dispenser = (await this.getLocalAccounts())[0];
+  /** Select Wallet1 by default, or explicitly use the most-funded local account. */
+  async dispenser(opts?: DispenserOpts) {
+    const accounts = await this.getLocalAccounts();
+    if (opts?.account === "highestBalance") {
+      const dispenser = accounts[0];
+      if (dispenser === undefined) {
+        throw Error("Unable to get dispenser!");
+      }
+      return dispenser;
+    }
+
+    const genesis = JSON.parse(await this.algod.genesis().do()) as {
+      alloc?: Array<{ addr: string; comment: string }>;
+    };
+    const wallet1Address = genesis.alloc?.find(
+      (allocation) => allocation.comment === "Wallet1",
+    )?.addr;
+    const dispenser = accounts.find(
+      (account) => account.address.toString() === wallet1Address,
+    );
 
     if (dispenser === undefined) {
-      throw Error("Unable to get dispenser!");
+      throw Error(
+        "Error retrieving LocalNet dispenser account; couldn't find the default account in KMD",
+      );
     }
 
     return dispenser;
