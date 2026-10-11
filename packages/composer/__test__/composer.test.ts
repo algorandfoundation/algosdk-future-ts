@@ -442,7 +442,7 @@ describe("Composer ARC56", () => {
     );
   });
 
-  it("should map ARC56 errors of any composer while an app client is registered", async () => {
+  it("should map ARC56 errors of any composer with one transformer per app id", async () => {
     const failingCall = () =>
       localnet
         .composer()
@@ -456,19 +456,36 @@ describe("Composer ARC56", () => {
         .execute(localnet.algod)
         .catch((e: unknown) => e as Error);
 
+    const expectMapped = async () => {
+      expect(((await failingCall()) as Error).message).toMatch(
+        new RegExp(
+          `^Runtime error when executing ARC56Test \\(appId: ${appId}\\)`,
+        ),
+      );
+    };
+
+    // Replaces the transformer of the client created in beforeAll
     const registered = Composer.errorTransformers.size;
     const client = new ARC56AppClient({ arc56, algod: localnet.algod, appId });
-    expect(Composer.errorTransformers.size).toBe(registered + 1);
-    client.unregisterErrorTransformer();
     expect(Composer.errorTransformers.size).toBe(registered);
+    await expectMapped();
 
-    // Still mapped by the client created in beforeAll
-    const error = await failingCall();
-    expect((error as Error).message).toMatch(
-      new RegExp(
-        `^Runtime error when executing ARC56Test \\(appId: ${appId}\\)`,
-      ),
+    client.unregisterErrorTransformer();
+    expect(Composer.errorTransformers.size).toBe(registered - 1);
+    expect(((await failingCall()) as Error).message).not.toMatch(
+      /^Runtime error/,
     );
+
+    // Unregistering a replaced transformer doesn't affect the newer one
+    const replaced = new ARC56AppClient({
+      arc56,
+      algod: localnet.algod,
+      appId,
+    });
+    new ARC56AppClient({ arc56, algod: localnet.algod, appId });
+    replaced.unregisterErrorTransformer();
+    expect(Composer.errorTransformers.size).toBe(registered);
+    await expectMapped();
   });
 
   it("should use the sender's signer when simulating without skipSignatures", async () => {

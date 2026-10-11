@@ -163,6 +163,13 @@ export type DecodedState = {
 /** The raw bytes of a global, local or box state key and its value */
 type RawStateEntry = { key: Uint8Array; value: Uint8Array };
 
+/**
+ * The error transformer registered with Composer for each app id. Only one
+ * client's transformer is registered per app, so creating clients for the same
+ * app repeatedly doesn't grow the registered transformers.
+ */
+const registeredErrorTransformers = new Map<bigint, ErrorTransformer>();
+
 export interface ARC56AppClientParams {
   arc56: ARC56Contract;
   appId: bigint | number;
@@ -206,13 +213,19 @@ export class ARC56AppClient {
     // While creating, the app id is unknown, so errors from any app would be
     // mapped with this contract. Only the client's own composers use it then.
     if (this.appId !== 0n) {
+      // The newest client for an app replaces the transformer of any previous
+      // one, e.g. so errors are mapped with the latest ARC56 spec
+      const previous = registeredErrorTransformers.get(this.appId);
+      if (previous) Composer.unregisterErrorTransformer(previous);
+      registeredErrorTransformers.set(this.appId, this.errorTransformer);
       Composer.registerErrorTransformer(this.errorTransformer);
     }
   }
 
   /**
    * Map logic errors from this app to their ARC56 error messages. Registered
-   * with every Composer once the app id is known.
+   * with every Composer once the app id is known, until another client for the
+   * same app is created.
    */
   private readonly errorTransformer: ErrorTransformer = async (e) => {
     // Errors from algod carry the details (app id and pc) in their response
@@ -243,9 +256,14 @@ export class ARC56AppClient {
 
   /**
    * Stop mapping this app's errors in composers other than the client's own,
-   * so the client can be garbage collected once it is no longer used.
+   * so the client can be garbage collected once it is no longer used. Does
+   * nothing if a newer client for the same app has replaced this one's.
    */
   unregisterErrorTransformer() {
+    if (registeredErrorTransformers.get(this.appId) !== this.errorTransformer) {
+      return;
+    }
+    registeredErrorTransformers.delete(this.appId);
     Composer.unregisterErrorTransformer(this.errorTransformer);
   }
 
