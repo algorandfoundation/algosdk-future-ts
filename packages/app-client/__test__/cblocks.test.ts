@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll } from "vitest";
 import algosdk from "algosdk";
 import { Localnet } from "@joe-p/algokit-lite-localnet";
-import { ARC56AppClient } from "../src/arc56_client";
+import { ARC56AppClient, compileProgram } from "../src/arc56_client";
 import {
   getConstantBlockOffset,
   parseLogicError,
@@ -128,11 +128,12 @@ describe("cblocks error mapping", () => {
   });
 
   it("needs the deployed program to map errors of a template-variable contract", async () => {
-    const deployed = await new ARC56AppClient({
-      arc56: templateAssert,
-      algod: localnet.algod,
-      appId: 0n,
-    }).compileProgram("approval", { PAYLOAD: new Uint8Array(10) });
+    const deployed = await compileProgram(
+      templateAssert,
+      localnet.algod,
+      "approval",
+      { PAYLOAD: new Uint8Array(10) },
+    );
 
     // With a 10-byte PAYLOAD the first op after the bytecblock is at pc 14, so
     // the assert "value must be 42" (pc 61 in the source info) is at pc 75
