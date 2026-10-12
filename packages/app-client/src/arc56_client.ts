@@ -48,6 +48,86 @@ function startsWith(bytes: Uint8Array, prefix: Uint8Array): boolean {
   return bytesEqual(bytes.subarray(0, prefix.length), prefix);
 }
 
+/**
+ * Get the bytecode of one of the app spec's programs. The byteCode in the
+ * spec is used when there are no template variables, otherwise the source is
+ * compiled by algod with the template variables substituted.
+ */
+export async function compileProgram(
+  arc56: ARC56Contract,
+  algod: Algodv2,
+  program: "clear" | "approval",
+  templateVars?: Record<string, string | bigint | number | Uint8Array>,
+): Promise<Uint8Array> {
+  const expectedVarsCount = Object.keys(arc56.templateVariables ?? {}).length;
+  const providedVarsCount = Object.keys(templateVars ?? {}).length;
+
+  if (
+    arc56.byteCode?.[program] &&
+    expectedVarsCount === 0 &&
+    providedVarsCount === 0
+  ) {
+    return algosdk.base64ToBytes(arc56.byteCode[program]);
+  }
+
+  if (!arc56.source?.[program]) {
+    if (arc56.byteCode?.[program]) {
+      return algosdk.base64ToBytes(arc56.byteCode[program]);
+    }
+    throw new Error(
+      `No source or bytecode found for ${program} program in ${arc56.name}`,
+    );
+  }
+
+  let tealString = algosdk.bytesToString(
+    algosdk.base64ToBytes(arc56.source[program]),
+  );
+
+  if (expectedVarsCount !== providedVarsCount) {
+    throw new Error(
+      `${arc56.name} expected ${expectedVarsCount} template variables but got ${providedVarsCount}`,
+    );
+  }
+
+  if (templateVars) {
+    for (const name of Object.keys(templateVars)) {
+      const val = templateVars[name];
+      if (val === undefined) {
+        throw new Error(`Template variable ${name} is undefined`);
+      }
+      const varDef = arc56.templateVariables?.[name];
+      if (!varDef) {
+        throw new Error(`Unexpected template variable: ${name}`);
+      }
+      const { type } = varDef;
+      const isUint = type === "uint64" || type === "AVMUint64";
+      const op = isUint ? "int" : "byte";
+      let formattedVal: string;
+      if (isUint) {
+        formattedVal = val.toString();
+      } else if (val instanceof Uint8Array) {
+        formattedVal = "0x" + algosdk.bytesToHex(val);
+      } else if (typeof val === "string" && val.startsWith("0x")) {
+        formattedVal = val;
+      } else {
+        formattedVal = `"${val}"`;
+      }
+
+      tealString = tealString.replace(
+        new RegExp(`push${op}\\s+TMPL_${name}\\b`, "g"),
+        `push${op} ${formattedVal}`,
+      );
+      tealString = tealString.replace(
+        new RegExp(`\\bTMPL_${name}\\b`, "g"),
+        formattedVal,
+      );
+    }
+  }
+
+  const result = await algod.compile(tealString).do();
+  return algosdk.base64ToBytes(result.result);
+}
+
 /** ARC56 action names, indexed by their OnApplicationComplete value */
 const ON_COMPLETE_STRINGS: Array<
   | "NoOp"
@@ -561,81 +641,6 @@ export class ARC56AppClient {
     return utilsGetABIValue(this.arc56, type, value);
   }
 
-  async compileProgram(
-    program: "clear" | "approval",
-    templateVars?: Record<string, string | bigint | number | Uint8Array>,
-  ): Promise<Uint8Array> {
-    const expectedVarsCount = Object.keys(
-      this.arc56.templateVariables ?? {},
-    ).length;
-    const providedVarsCount = Object.keys(templateVars ?? {}).length;
-
-    if (
-      this.arc56.byteCode?.[program] &&
-      expectedVarsCount === 0 &&
-      providedVarsCount === 0
-    ) {
-      return algosdk.base64ToBytes(this.arc56.byteCode[program]);
-    }
-
-    if (!this.arc56.source?.[program]) {
-      if (this.arc56.byteCode?.[program]) {
-        return algosdk.base64ToBytes(this.arc56.byteCode[program]);
-      }
-      throw new Error(
-        `No source or bytecode found for ${program} program in ${this.arc56.name}`,
-      );
-    }
-
-    let tealString = algosdk.bytesToString(
-      algosdk.base64ToBytes(this.arc56.source[program]),
-    );
-
-    if (expectedVarsCount !== providedVarsCount) {
-      throw new Error(
-        `${this.arc56.name} expected ${expectedVarsCount} template variables but got ${providedVarsCount}`,
-      );
-    }
-
-    if (templateVars) {
-      for (const name of Object.keys(templateVars)) {
-        const val = templateVars[name];
-        if (val === undefined) {
-          throw new Error(`Template variable ${name} is undefined`);
-        }
-        const varDef = this.arc56.templateVariables?.[name];
-        if (!varDef) {
-          throw new Error(`Unexpected template variable: ${name}`);
-        }
-        const { type } = varDef;
-        const isUint = type === "uint64" || type === "AVMUint64";
-        const op = isUint ? "int" : "byte";
-        let formattedVal: string;
-        if (isUint) {
-          formattedVal = val.toString();
-        } else if (val instanceof Uint8Array) {
-          formattedVal = "0x" + algosdk.bytesToHex(val);
-        } else if (typeof val === "string" && val.startsWith("0x")) {
-          formattedVal = val;
-        } else {
-          formattedVal = `"${val}"`;
-        }
-
-        tealString = tealString.replace(
-          new RegExp(`push${op}\\s+TMPL_${name}\\b`, "g"),
-          `push${op} ${formattedVal}`,
-        );
-        tealString = tealString.replace(
-          new RegExp(`\\bTMPL_${name}\\b`, "g"),
-          formattedVal,
-        );
-      }
-    }
-
-    const result = await this.algod.compile(tealString).do();
-    return algosdk.base64ToBytes(result.result);
-  }
-
   getParams<TReturn = unknown>(
     params: AppClientMethodParams,
   ): MethodParams<TReturn> {
@@ -820,13 +825,17 @@ export class ARC56AppClient {
 
     const approvalProgram =
       methodParams.approvalProgram ??
-      (await tempClient.compileProgram(
+      (await compileProgram(
+        arc56,
+        algod,
         "approval",
         methodParams.templateVariables,
       ));
     const clearProgram =
       methodParams.clearProgram ??
-      (await tempClient.compileProgram(
+      (await compileProgram(
+        arc56,
+        algod,
         "clear",
         methodParams.templateVariables,
       ));
@@ -902,13 +911,17 @@ export class ARC56AppClient {
 
     const approvalProgram =
       createParams.approvalProgram ??
-      (await tempClient.compileProgram(
+      (await compileProgram(
+        arc56,
+        algod,
         "approval",
         createParams.templateVariables,
       ));
     const clearProgram =
       createParams.clearProgram ??
-      (await tempClient.compileProgram(
+      (await compileProgram(
+        arc56,
+        algod,
         "clear",
         createParams.templateVariables,
       ));
