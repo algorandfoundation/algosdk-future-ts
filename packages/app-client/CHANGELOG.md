@@ -1,3 +1,9 @@
+# 0.5.0 - October 12th, 2026
+
+## Breaking Changes
+
+- Replace the `ARC56AppClient.compileProgram` method with a top-level `compileProgram(arc56, algod, program, templateVars?)` function, so programs can be compiled from an app spec without creating a client.
+
 # 0.4.1 - October 11th, 2026
 
 ## Fixes
