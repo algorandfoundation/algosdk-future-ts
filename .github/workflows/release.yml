@@ -19,6 +19,7 @@ permissions:
 jobs:
   composer:
     uses: ./.github/workflows/release-package.yml
+    secrets: inherit
     with:
       package: composer
       tag-prefix: algokit-lite-composer-v
@@ -26,6 +27,7 @@ jobs:
   app-client:
     needs: composer
     uses: ./.github/workflows/release-package.yml
+    secrets: inherit
     with:
       package: app-client
       tag-prefix: algokit-lite-app-client-v
@@ -33,6 +35,7 @@ jobs:
   localnet:
     needs: app-client
     uses: ./.github/workflows/release-package.yml
+    secrets: inherit
     with:
       package: localnet
       tag-prefix: algokit-lite-localnet-v
@@ -40,6 +43,7 @@ jobs:
   generator:
     needs: localnet
     uses: ./.github/workflows/release-package.yml
+    secrets: inherit
     with:
       package: generator
       tag-prefix: algokit-lite-generator-v
@@ -47,6 +51,7 @@ jobs:
   algokit-lite:
     needs: generator
     uses: ./.github/workflows/release-package.yml
+    secrets: inherit
     with:
       package: algokit-lite
       # Matches the tags released before the split into packages
