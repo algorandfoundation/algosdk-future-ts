@@ -1,3 +1,9 @@
+# 0.3.0 - October 15th, 2026
+
+## Breaking Changes
+
+- Rename the package from `@joe-p/algokit-lite-localnet` to `@joe-p/algosdk-localnet` as part of the rebrand from algoKIT lite to algosdk-future.
+
 # 0.2.1 - October 11th, 2026
 
 ## Fixes

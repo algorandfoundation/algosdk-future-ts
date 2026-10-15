@@ -1,6 +1,6 @@
 {
   "name": "@joe-p/algosdk-localnet",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "description": "LocalNet helpers for algosdk-future",
   "repository": {
     "type": "git",
