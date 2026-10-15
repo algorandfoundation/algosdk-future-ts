@@ -57,7 +57,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        package: [composer, app-client, localnet, generator, algokit-lite]
+        package: [composer, app-client, localnet, generator, algosdk-future]
     steps:
       - name: Check out
         uses: actions/checkout@v4

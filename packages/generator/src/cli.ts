@@ -2,13 +2,13 @@
 import * as fs from "fs";
 import * as path from "path";
 import { ARC56Generator } from "./generator.ts";
-import type { ARC56Contract } from "@joe-p/algokit-lite-composer";
+import type { ARC56Contract } from "@joe-p/algosdk-composer";
 
 const HELP = `
-algoKIT lite: typed client generator
+algosdk-future: typed client generator
 
 Usage:
-  algokit-lite <arc56.json> [options]
+  algosdk-future <arc56.json> [options]
 
 Generates a typed ARC-56 client from an ARC-56 JSON file.
 
@@ -18,11 +18,11 @@ Options:
       --app-client-import-path <path>
                             Module specifier the generated client imports the
                             app client from
-                            (default: "@joe-p/algokit-lite-app-client")
+                            (default: "@joe-p/algosdk-app-client")
       --composer-import-path <path>
                             Module specifier the generated client imports
                             composer and ARC-56 types from
-                            (default: "@joe-p/algokit-lite-composer")
+                            (default: "@joe-p/algosdk-composer")
   -h, --help                Show this help message
   -v, --version             Print the version
 `;

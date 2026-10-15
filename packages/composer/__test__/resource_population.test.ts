@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll } from "vitest";
 import algosdk from "algosdk";
-import { Localnet } from "@joe-p/algokit-lite-localnet";
+import { Localnet } from "@joe-p/algosdk-localnet";
 import { Composer } from "../src/composer";
 import { populateAppCallResources } from "../src/resource_population";
 

@@ -5,17 +5,17 @@ import {
   type StructFields,
   type StructField,
   type Method,
-} from "@joe-p/algokit-lite-composer";
+} from "@joe-p/algosdk-composer";
 
 export interface ARC56GeneratorOptions {
   /**
    * The module specifier the generated client imports the app client from.
-   * Defaults to "@joe-p/algokit-lite-app-client".
+   * Defaults to "@joe-p/algosdk-app-client".
    */
   appClientImportPath?: string;
   /**
    * The module specifier the generated client imports composer and ARC-56
-   * types from. Defaults to "@joe-p/algokit-lite-composer".
+   * types from. Defaults to "@joe-p/algosdk-composer".
    */
   composerImportPath?: string;
 }
@@ -27,8 +27,8 @@ export class ARC56Generator {
   constructor(arc56: ARC56Contract, options: ARC56GeneratorOptions = {}) {
     this.arc56 = arc56;
     this.options = {
-      appClientImportPath: "@joe-p/algokit-lite-app-client",
-      composerImportPath: "@joe-p/algokit-lite-composer",
+      appClientImportPath: "@joe-p/algosdk-app-client",
+      composerImportPath: "@joe-p/algosdk-composer",
       ...options,
     };
   }
@@ -691,9 +691,9 @@ export class ARC56Generator {
 
   async generate(): Promise<string> {
     const appClientImportPath =
-      this.options.appClientImportPath ?? "@joe-p/algokit-lite-app-client";
+      this.options.appClientImportPath ?? "@joe-p/algosdk-app-client";
     const composerImportPath =
-      this.options.composerImportPath ?? "@joe-p/algokit-lite-composer";
+      this.options.composerImportPath ?? "@joe-p/algosdk-composer";
     const hasBareCreate = (this.arc56.bareActions?.create ?? []).length > 0;
 
     const bareImports = hasBareCreate

@@ -1,5 +1,5 @@
-# @joe-p/algokit-lite-localnet
+# @joe-p/algosdk-localnet
 
-algoKIT lite Localnet account generation and funding.
+algosdk-future Localnet account generation and funding.
 
-See the [algoKIT lite README](https://github.com/joe-p/algokit-lite-ts#readme) for documentation.
+See the [algosdk-future README](https://github.com/joe-p/algosdk-future-ts#readme) for documentation.

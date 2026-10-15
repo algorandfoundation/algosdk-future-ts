@@ -6,7 +6,7 @@ import algosdk, {
   type Ed25519SigningKey,
 } from "algosdk";
 import nacl from "tweetnacl";
-import { Composer } from "@joe-p/algokit-lite-composer";
+import { Composer } from "@joe-p/algosdk-composer";
 
 export const DEFAULT_LOCALNET_TOKEN = "a".repeat(64);
 export const DEFAULT_LOCALNET_HOST = "http://localhost";

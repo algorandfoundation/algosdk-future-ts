@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeAll } from "vitest";
 import algosdk from "algosdk";
-import { Localnet } from "@joe-p/algokit-lite-localnet";
+import { Localnet } from "@joe-p/algosdk-localnet";
 import { ARC56AppClient } from "../src/arc56_client";
-import type { ARC56Contract } from "@joe-p/algokit-lite-composer";
+import type { ARC56Contract } from "@joe-p/algosdk-composer";
 import arc56Json from "../../../fixtures/ARC56Test.arc56.json";
 
 describe.each(["global", "local"] as const)(

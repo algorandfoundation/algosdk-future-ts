@@ -12,7 +12,7 @@ const fixture = fileURLToPath(
 
 describe("CLI", () => {
   it("generates a client using the usage printed by --help", () => {
-    const directory = mkdtempSync(join(tmpdir(), "algokit-lite-cli-"));
+    const directory = mkdtempSync(join(tmpdir(), "algosdk-future-cli-"));
     const runCli = (args: string[]) =>
       spawnSync(process.execPath, ["--import", "tsx", cli, ...args], {
         encoding: "utf-8",
@@ -24,8 +24,8 @@ describe("CLI", () => {
       const usage = help.stdout
         .split("\n")
         .map((line) => line.trim())
-        .find((line) => line.startsWith("algokit-lite "));
-      expect(usage).toBe("algokit-lite <arc56.json> [options]");
+        .find((line) => line.startsWith("algosdk-future "));
+      expect(usage).toBe("algosdk-future <arc56.json> [options]");
 
       const output = join(directory, "ARC56TestClient.ts");
       const args = (usage ?? "")

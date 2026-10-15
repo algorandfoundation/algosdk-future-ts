@@ -1,10 +1,10 @@
 {
-  "name": "@joe-p/algokit-lite-localnet",
+  "name": "@joe-p/algosdk-localnet",
   "version": "0.2.1",
-  "description": "LocalNet helpers for algoKIT lite",
+  "description": "LocalNet helpers for algosdk-future",
   "repository": {
     "type": "git",
-    "url": "https://github.com/joe-p/algokit-lite-ts",
+    "url": "https://github.com/joe-p/algosdk-future-ts",
     "directory": "packages/localnet"
   },
   "module": "dist/index.js",
@@ -29,7 +29,7 @@
     "algosdk": "^3.8.0"
   },
   "dependencies": {
-    "@joe-p/algokit-lite-composer": "workspace:^",
+    "@joe-p/algosdk-composer": "workspace:^",
     "algosdk": "^3.8.0",
     "tweetnacl": "^1.0.3"
   }

@@ -22,7 +22,7 @@ jobs:
     secrets: inherit
     with:
       package: composer
-      tag-prefix: algokit-lite-composer-v
+      tag-prefix: algosdk-composer-v
 
   app-client:
     needs: composer
@@ -30,7 +30,7 @@ jobs:
     secrets: inherit
     with:
       package: app-client
-      tag-prefix: algokit-lite-app-client-v
+      tag-prefix: algosdk-app-client-v
 
   localnet:
     needs: app-client
@@ -38,7 +38,7 @@ jobs:
     secrets: inherit
     with:
       package: localnet
-      tag-prefix: algokit-lite-localnet-v
+      tag-prefix: algosdk-localnet-v
 
   generator:
     needs: localnet
@@ -46,13 +46,13 @@ jobs:
     secrets: inherit
     with:
       package: generator
-      tag-prefix: algokit-lite-generator-v
+      tag-prefix: algosdk-generator-v
 
-  algokit-lite:
+  algosdk-future:
     needs: generator
     uses: ./.github/workflows/release-package.yml
     secrets: inherit
     with:
-      package: algokit-lite
+      package: algosdk-future
       # Matches the tags released before the split into packages
       tag-prefix: v

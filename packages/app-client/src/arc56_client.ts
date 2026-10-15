@@ -20,7 +20,7 @@ import {
   decodeMethodReturnValue as utilsDecodeMethodReturnValue,
   getAbiMethod,
   parseLogicError,
-} from "@joe-p/algokit-lite-composer";
+} from "@joe-p/algosdk-composer";
 
 /** Bytes of program that fit in a single application program page */
 const APP_PAGE_SIZE = 2048;
