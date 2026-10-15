@@ -1,3 +1,9 @@
+# 0.6.0 - October 15th, 2026
+
+## Breaking Changes
+
+- Rename the package from `@joe-p/algokit-lite-app-client` to `@joe-p/algosdk-app-client` as part of the rebrand from algoKIT lite to algosdk-future.
+
 # 0.5.0 - October 12th, 2026
 
 ## Breaking Changes

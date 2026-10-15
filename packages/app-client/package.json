@@ -1,6 +1,6 @@
 {
   "name": "@joe-p/algosdk-app-client",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "ARC-56 app client for algosdk-future",
   "repository": {
     "type": "git",
