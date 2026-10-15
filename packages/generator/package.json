@@ -1,6 +1,6 @@
 {
   "name": "@joe-p/algosdk-generator",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Typed ARC-56 client generator and CLI for algosdk-future",
   "repository": {
     "type": "git",
