@@ -1,6 +1,6 @@
 {
   "name": "@joe-p/algosdk-composer",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Transaction composer and ARC-56 utilities for algosdk-future",
   "repository": {
     "type": "git",

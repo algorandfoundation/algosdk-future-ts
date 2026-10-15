@@ -1,3 +1,9 @@
+# 0.4.0 - October 15th, 2026
+
+## Breaking Changes
+
+- Rename the package from `@joe-p/algokit-lite-composer` to `@joe-p/algosdk-composer` as part of the rebrand from algoKIT lite to algosdk-future.
+
 # 0.3.0 - October 11th, 2026
 
 ## Features
