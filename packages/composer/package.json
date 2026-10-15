@@ -1,10 +1,10 @@
 {
-  "name": "@joe-p/algokit-lite-composer",
+  "name": "@joe-p/algosdk-composer",
   "version": "0.3.0",
-  "description": "Transaction composer and ARC-56 utilities for algoKIT lite",
+  "description": "Transaction composer and ARC-56 utilities for algosdk-future",
   "repository": {
     "type": "git",
-    "url": "https://github.com/joe-p/algokit-lite-ts",
+    "url": "https://github.com/joe-p/algosdk-future-ts",
     "directory": "packages/composer"
   },
   "module": "dist/index.js",

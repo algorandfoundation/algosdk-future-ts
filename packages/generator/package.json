@@ -1,10 +1,10 @@
 {
-  "name": "@joe-p/algokit-lite-generator",
+  "name": "@joe-p/algosdk-generator",
   "version": "0.3.0",
-  "description": "Typed ARC-56 client generator and CLI for algoKIT lite",
+  "description": "Typed ARC-56 client generator and CLI for algosdk-future",
   "repository": {
     "type": "git",
-    "url": "https://github.com/joe-p/algokit-lite-ts",
+    "url": "https://github.com/joe-p/algosdk-future-ts",
     "directory": "packages/generator"
   },
   "module": "dist/index.js",
@@ -22,7 +22,7 @@
     "README.md"
   ],
   "bin": {
-    "algokit-lite": "./dist/cli.js"
+    "algosdk-future": "./dist/cli.js"
   },
   "scripts": {
     "build": "node -e \"fs.rmSync('dist',{recursive:true,force:true})\" && tsc6 -p tsconfig.build.json",
@@ -32,7 +32,7 @@
     "algosdk": "^3.8.0"
   },
   "dependencies": {
-    "@joe-p/algokit-lite-composer": "workspace:^",
+    "@joe-p/algosdk-composer": "workspace:^",
     "algosdk": "^3.8.0",
     "prettier": "^3.9.6"
   }

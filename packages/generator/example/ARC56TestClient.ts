@@ -5,12 +5,12 @@ import {
   type AppClientMethodParams,
   type CreateMethodParams,
   type MethodExecutionResult,
-} from "@joe-p/algokit-lite-app-client";
+} from "@joe-p/algosdk-app-client";
 import {
   type MethodParams,
   type PaymentParams,
   type ARC56Contract,
-} from "@joe-p/algokit-lite-composer";
+} from "@joe-p/algosdk-composer";
 
 type TypedMethodParams<TArgs = undefined> = Omit<
   AppClientMethodParams,

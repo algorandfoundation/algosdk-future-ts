@@ -1,13 +1,13 @@
 import { describe, it, expect, vi } from "vitest";
 import algosdk from "algosdk";
 import ts from "typescript";
-import { ARC56AppClient } from "@joe-p/algokit-lite-app-client";
+import { ARC56AppClient } from "@joe-p/algosdk-app-client";
 import {
   getAbiMethod,
   decodeMethodReturnValue,
   Composer,
   type ARC56Contract,
-} from "@joe-p/algokit-lite-composer";
+} from "@joe-p/algosdk-composer";
 import { ARC56Generator } from "../src/generator";
 import arc56Json from "../../../fixtures/ARC56Test.arc56.json";
 

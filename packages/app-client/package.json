@@ -1,10 +1,10 @@
 {
-  "name": "@joe-p/algokit-lite-app-client",
+  "name": "@joe-p/algosdk-app-client",
   "version": "0.5.0",
-  "description": "ARC-56 app client for algoKIT lite",
+  "description": "ARC-56 app client for algosdk-future",
   "repository": {
     "type": "git",
-    "url": "https://github.com/joe-p/algokit-lite-ts",
+    "url": "https://github.com/joe-p/algosdk-future-ts",
     "directory": "packages/app-client"
   },
   "module": "dist/index.js",
@@ -29,7 +29,7 @@
     "algosdk": "^3.8.0"
   },
   "dependencies": {
-    "@joe-p/algokit-lite-composer": "workspace:^",
+    "@joe-p/algosdk-composer": "workspace:^",
     "algosdk": "^3.8.0"
   }
 }

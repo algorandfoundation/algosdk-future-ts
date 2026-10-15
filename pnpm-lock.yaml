@@ -42,18 +42,18 @@ importers:
         specifier: ^5.0.3
         version: 5.0.3(@types/node@24.19.1)(vite@8.3.2(@types/node@24.19.1)(esbuild@0.28.2)(tsx@4.23.15))
 
-  packages/algokit-lite:
+  packages/algosdk-future:
     dependencies:
-      '@joe-p/algokit-lite-app-client':
+      '@joe-p/algosdk-app-client':
         specifier: workspace:^
         version: link:../app-client
-      '@joe-p/algokit-lite-composer':
+      '@joe-p/algosdk-composer':
         specifier: workspace:^
         version: link:../composer
-      '@joe-p/algokit-lite-generator':
+      '@joe-p/algosdk-generator':
         specifier: workspace:^
         version: link:../generator
-      '@joe-p/algokit-lite-localnet':
+      '@joe-p/algosdk-localnet':
         specifier: workspace:^
         version: link:../localnet
       algosdk:
@@ -62,7 +62,7 @@ importers:
 
   packages/app-client:
     dependencies:
-      '@joe-p/algokit-lite-composer':
+      '@joe-p/algosdk-composer':
         specifier: workspace:^
         version: link:../composer
       algosdk:
@@ -77,7 +77,7 @@ importers:
 
   packages/generator:
     dependencies:
-      '@joe-p/algokit-lite-composer':
+      '@joe-p/algosdk-composer':
         specifier: workspace:^
         version: link:../composer
       algosdk:
@@ -89,7 +89,7 @@ importers:
 
   packages/localnet:
     dependencies:
-      '@joe-p/algokit-lite-composer':
+      '@joe-p/algosdk-composer':
         specifier: workspace:^
         version: link:../composer
       algosdk:

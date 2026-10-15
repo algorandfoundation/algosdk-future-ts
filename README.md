@@ -1,4 +1,4 @@
-# AlgoKit Lite
+# algosdk-future
 
 This library is a light wrapper around algosdk to make it easier to interact with Algorand. The main features are
 
@@ -12,25 +12,25 @@ This library is a light wrapper around algosdk to make it easier to interact wit
 
 ## Packages
 
-| Package                                                 | Contents                                                    |
-| ------------------------------------------------------- | ----------------------------------------------------------- |
-| [`@joe-p/algokit-lite`](packages/algokit-lite)          | Re-exports every package below                              |
-| [`@joe-p/algokit-lite-composer`](packages/composer)     | Transaction group composer, ARC56 types and utilities       |
-| [`@joe-p/algokit-lite-app-client`](packages/app-client) | ARC56 app client                                            |
-| [`@joe-p/algokit-lite-localnet`](packages/localnet)     | Localnet account generation and funding                     |
-| [`@joe-p/algokit-lite-generator`](packages/generator)   | Typed ARC56 app client generator and the `algokit-lite` CLI |
+| Package                                            | Contents                                                      |
+| -------------------------------------------------- | ------------------------------------------------------------- |
+| [`@joe-p/algosdk-future`](packages/algosdk-future) | Re-exports every package below                                |
+| [`@joe-p/algosdk-composer`](packages/composer)     | Transaction group composer, ARC56 types and utilities         |
+| [`@joe-p/algosdk-app-client`](packages/app-client) | ARC56 app client                                              |
+| [`@joe-p/algosdk-localnet`](packages/localnet)     | Localnet account generation and funding                       |
+| [`@joe-p/algosdk-generator`](packages/generator)   | Typed ARC56 app client generator and the `algosdk-future` CLI |
 
-Generated clients import from `@joe-p/algokit-lite-app-client` and `@joe-p/algokit-lite-composer`, so projects using them need both packages.
+Generated clients import from `@joe-p/algosdk-app-client` and `@joe-p/algosdk-composer`, so projects using them need both packages.
 
 ## Why Not Utils?
 
-AlgoKit Lite is intentionally much simpler than AlgoKit utils. The abstractions are smaller and the amount of "magic" happening is lower. Some AlgoKit Lite interfaces are more verbose/explicit than AlgoKit Utils, but that is intentional. This makes it easier for agents to understand the library and for humans to review the code.
+algosdk-future is intentionally much simpler than AlgoKit utils. The abstractions are smaller and the amount of "magic" happening is lower. Some algosdk-future interfaces are more verbose/explicit than AlgoKit Utils, but that is intentional. This makes it easier for agents to understand the library and for humans to review the code.
 
-Additionally, AlgoKit Lite uses some new features of algod to do things in a different and breaking way. For example, transactions in AlgoKit lite have a `feePercent` field rather than an `extraFee` or `maxFee` field. This allows simulate to be used to determine transaction fees rather than relying on hardcoded values.
+Additionally, algosdk-future uses some new features of algod to do things in a different and breaking way. For example, transactions in algosdk-future have a `feePercent` field rather than an `extraFee` or `maxFee` field. This allows simulate to be used to determine transaction fees rather than relying on hardcoded values.
 
 ## Composer Migration
 
-The general pattern of the composer for both AlgoKit Utils and Lite is more or less the same. The composer takes in transaction parameters and can optionally do some of the mundane work (like setting suggestedParams) under the hood.
+The general pattern of the composer for both AlgoKit Utils and algosdk-future is more or less the same. The composer takes in transaction parameters and can optionally do some of the mundane work (like setting suggestedParams) under the hood.
 
 ### extraFee and maxFee
 
@@ -78,9 +78,9 @@ composer.send({ coverAppCallInnerTransactionFees: true });
 
 The problem with this pattern is that it generally requires some assumptions to be made about fee prices which may change under congestion or with consensus updates.
 
-#### Lite
+#### algosdk-future
 
-Lite does not have a `maxFee` or `extraFee` field. Instead, each transaction has a `feePercent` parameter that defines what proportion of the group's total fee that transaction pays. The Lite composer uses simulate to determine the group's total fee, which is then split across the transactions according to their `feePercent`. This avoids any assumptions needing to be made about fee prices.
+algosdk-future does not have a `maxFee` or `extraFee` field. Instead, each transaction has a `feePercent` parameter that defines what proportion of the group's total fee that transaction pays. The algosdk-future composer uses simulate to determine the group's total fee, which is then split across the transactions according to their `feePercent`. This avoids any assumptions needing to be made about fee prices.
 
 ```ts
 composer
@@ -126,9 +126,9 @@ composer.addPayment({
 });
 ```
 
-#### Lite
+#### algosdk-future
 
-In AlgoKit Lite, the sender must always be a `ComposerSender`, which is defined as `AddressWithTransactionSigner & { emptyTxnSigner?: TransactionSigner }`
+In algosdk-future, the sender must always be a `ComposerSender`, which is defined as `AddressWithTransactionSigner & { emptyTxnSigner?: TransactionSigner }`
 
 ```ts
 const { activeAddress, transactionSigner } = useWallet();
@@ -158,13 +158,13 @@ composer.addPayment({
   sender,
   receiver,
   amount,
-  feePercent: 1, // AlgoKit Lite will use the sender.emptyTxnSigner during simulate to get the fees required for the pqsig
+  feePercent: 1, // algosdk-future will use the sender.emptyTxnSigner during simulate to get the fees required for the pqsig
 });
 ```
 
 ### Resource Population
 
-Like utils, the Lite composer populates app call resources by default. The same simulation that determines fees also reports the accounts, apps, assets and boxes that app calls access without referencing, and the composer adds them to the group's reference arrays. App calls that use an access list are left untouched. To turn it off, construct the composer with `populateAppCallResources: false`:
+Like utils, the algosdk-future composer populates app call resources by default. The same simulation that determines fees also reports the accounts, apps, assets and boxes that app calls access without referencing, and the composer adds them to the group's reference arrays. App calls that use an access list are left untouched. To turn it off, construct the composer with `populateAppCallResources: false`:
 
 ```ts
 const composer = new Composer({
@@ -175,7 +175,7 @@ const composer = new Composer({
 
 ## Typed Client Migration
 
-One of the main reasons projects use AlgoKit Utils is because of the typed client generator. AlgoKit Lite also offers a typed client generator that covers most of the features developers want (namely typed method calls) but there are some abstractions in the Utils version that are not implemented in the Lite version.
+One of the main reasons projects use AlgoKit Utils is because of the typed client generator. algosdk-future also offers a typed client generator that covers most of the features developers want (namely typed method calls) but there are some abstractions in the Utils version that are not implemented in algosdk-future.
 
 ### App Creation, Factory & Deployer
 
@@ -201,9 +201,9 @@ const { appClient } = factory.send.create.createApplication({
 });
 ```
 
-##### Lite
+##### algosdk-future
 
-In AlgoKit Lite, there is no Factory class and creation is done via a static method
+In algosdk-future, there is no Factory class and creation is done via a static method
 
 ```ts
 import { HelloWorldClient } from "../contracts/clients/HelloWorld";
@@ -232,7 +232,7 @@ The state schema comes from the ARC56 contract, and the number of extra program 
 
 #### Idempotent Deployer
 
-AlgoKit Utils includes abstractions for idempotent deployment. This feature uses the note field and indexer to find previous deployments of a contract. AlgoKit Lite does not include a similar feature. If you'd like to track previous deployments, you must implement your own way of recording past deployments (on or off chain).
+AlgoKit Utils includes abstractions for idempotent deployment. This feature uses the note field and indexer to find previous deployments of a contract. algosdk-future does not include a similar feature. If you'd like to track previous deployments, you must implement your own way of recording past deployments (on or off chain).
 
 ### Overloaded ABI Methods
 
@@ -259,9 +259,9 @@ const resultOfMethodOne = result.returns[0];
 const resultOfMethodTwo = result.returns[1];
 ```
 
-#### Lite
+#### algosdk-future
 
-With Lite, you can use the app client's `params` object to get the parameters to pass to a `Composer`. When calls are chained, the composer tracks each generated method's return type.
+With algosdk-future, you can use the app client's `params` object to get the parameters to pass to a `Composer`. When calls are chained, the composer tracks each generated method's return type.
 
 ```ts
 const composer = await new Composer(...)

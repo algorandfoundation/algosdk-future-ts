@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll } from "vitest";
 import algosdk, { type Falcon1024SigningKey } from "algosdk";
-import { Localnet } from "@joe-p/algokit-lite-localnet";
-import { ARC56AppClient } from "@joe-p/algokit-lite-app-client";
+import { Localnet } from "@joe-p/algosdk-localnet";
+import { ARC56AppClient } from "@joe-p/algosdk-app-client";
 import {
   Composer,
   type ErrorTransformer,

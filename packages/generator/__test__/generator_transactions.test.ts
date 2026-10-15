@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import algosdk from "algosdk";
 import ts from "typescript";
 import { ARC56Generator } from "../src/generator";
-import { Composer, type ARC56Contract } from "@joe-p/algokit-lite-composer";
+import { Composer, type ARC56Contract } from "@joe-p/algosdk-composer";
 
 const transactionTypes = ["axfer", "afrz", "keyreg", "appl", "acfg", "txn"];
 const arc56: ARC56Contract = {

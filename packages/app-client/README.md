@@ -1,5 +1,5 @@
-# @joe-p/algokit-lite-app-client
+# @joe-p/algosdk-app-client
 
-The algoKIT lite ARC56 app client.
+The algosdk-future ARC56 app client.
 
-See the [algoKIT lite README](https://github.com/joe-p/algokit-lite-ts#readme) for documentation.
+See the [algosdk-future README](https://github.com/joe-p/algosdk-future-ts#readme) for documentation.

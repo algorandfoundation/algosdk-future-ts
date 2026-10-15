@@ -1,5 +1,5 @@
-# @joe-p/algokit-lite-composer
+# @joe-p/algosdk-composer
 
-The algoKIT lite transaction group composer, ARC56 types and ARC56 utilities.
+The algosdk-future transaction group composer, ARC56 types and ARC56 utilities.
 
-See the [algoKIT lite README](https://github.com/joe-p/algokit-lite-ts#readme) for documentation.
+See the [algosdk-future README](https://github.com/joe-p/algosdk-future-ts#readme) for documentation.

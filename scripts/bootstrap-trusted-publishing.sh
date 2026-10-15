@@ -19,11 +19,11 @@
 # Usage: scripts/bootstrap-trusted-publishing.sh [--dry-run]
 set -euo pipefail
 
-REPOSITORY="joe-p/algokit-lite-ts"
+REPOSITORY="joe-p/algosdk-future-ts"
 # npm matches the workflow that requests the OIDC token, which is the calling
 # workflow, not the reusable release-package.yml
 WORKFLOW="release.yml"
-PACKAGES=(composer app-client localnet generator algokit-lite)
+PACKAGES=(composer app-client localnet generator algosdk-future)
 PLACEHOLDER_VERSION="0.0.0"
 DEPRECATION_MESSAGE="Placeholder for setting up trusted publishing, contains no code. Install a later version."
 
