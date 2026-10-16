@@ -1,3 +1,9 @@
+# 0.7.0 - October 16th, 2026
+
+## Breaking Changes
+
+- Publish as `@algosdk/app-client` (previously `@joe-p/algosdk-app-client`) and depend on `@algosdk/transaction-composer`.
+
 # 0.6.0 - October 15th, 2026
 
 ## Breaking Changes
