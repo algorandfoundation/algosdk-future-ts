@@ -1,3 +1,9 @@
+# 0.4.0 - October 16th, 2026
+
+## Breaking Changes
+
+- Publish as `@algosdk/localnet` (previously `@joe-p/algosdk-localnet`). `composer()` now returns a `TransactionComposer`.
+
 # 0.3.0 - October 15th, 2026
 
 ## Breaking Changes
