@@ -19,7 +19,7 @@
 # Usage: scripts/bootstrap-trusted-publishing.sh [--dry-run]
 set -euo pipefail
 
-REPOSITORY="joe-p/algosdk-future-ts"
+REPOSITORY="algorandfoundation/algosdk-future-ts"
 # npm matches the workflow that requests the OIDC token, which is the calling
 # workflow, not the reusable release-package.yml
 WORKFLOW="release.yml"

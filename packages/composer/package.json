@@ -4,7 +4,7 @@
   "description": "Transaction composer and ARC-56 utilities for @algosdk/future",
   "repository": {
     "type": "git",
-    "url": "https://github.com/joe-p/algosdk-future-ts",
+    "url": "https://github.com/algorandfoundation/algosdk-future-ts",
     "directory": "packages/composer"
   },
   "module": "dist/index.js",

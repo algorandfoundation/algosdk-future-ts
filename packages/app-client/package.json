@@ -4,7 +4,7 @@
   "description": "ARC-56 app client for @algosdk/future",
   "repository": {
     "type": "git",
-    "url": "https://github.com/joe-p/algosdk-future-ts",
+    "url": "https://github.com/algorandfoundation/algosdk-future-ts",
     "directory": "packages/app-client"
   },
   "module": "dist/index.js",

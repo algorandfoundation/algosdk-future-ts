@@ -4,7 +4,7 @@
   "description": "Re-exports every @algosdk/future package",
   "repository": {
     "type": "git",
-    "url": "https://github.com/joe-p/algosdk-future-ts",
+    "url": "https://github.com/algorandfoundation/algosdk-future-ts",
     "directory": "packages/algosdk-future"
   },
   "module": "dist/index.js",

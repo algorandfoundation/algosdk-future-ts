@@ -4,7 +4,7 @@
   "description": "Typed ARC-56 client generator and CLI for @algosdk/future",
   "repository": {
     "type": "git",
-    "url": "https://github.com/joe-p/algosdk-future-ts",
+    "url": "https://github.com/algorandfoundation/algosdk-future-ts",
     "directory": "packages/generator"
   },
   "module": "dist/index.js",
