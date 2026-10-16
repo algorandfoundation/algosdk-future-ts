@@ -1,3 +1,10 @@
+# 0.5.0 - October 16th, 2026
+
+## Breaking Changes
+
+- Publish as `@algosdk/transaction-composer` (previously `@joe-p/algosdk-composer`).
+- Rename the `Composer` class to `TransactionComposer`.
+
 # 0.4.0 - October 15th, 2026
 
 ## Breaking Changes
