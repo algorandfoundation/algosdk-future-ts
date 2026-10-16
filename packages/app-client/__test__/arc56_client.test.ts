@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeAll } from "vitest";
 import algosdk from "algosdk";
-import { Localnet } from "@joe-p/algosdk-localnet";
+import { Localnet } from "@algosdk/localnet";
 import { ARC56AppClient } from "../src/arc56_client";
-import type { ARC56Contract } from "@joe-p/algosdk-composer";
+import type { ARC56Contract } from "@algosdk/transaction-composer";
 import arc56Json from "../../../fixtures/ARC56Test.arc56.json";
 
 describe.each(["global", "local"] as const)(
@@ -324,7 +324,7 @@ describe("ARC56AppClient", () => {
     expect(returnValue).toEqual({ sum: 50n, difference: 35n });
   });
 
-  it("should compose multiple app clients together using Composer and getParams", async () => {
+  it("should compose multiple app clients together using TransactionComposer and getParams", async () => {
     const { appClient: appClient1 } = await ARC56AppClient.createMethodCall({
       arc56,
       algod: localnet.algod,

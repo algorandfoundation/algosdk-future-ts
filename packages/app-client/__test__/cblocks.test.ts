@@ -1,12 +1,12 @@
 import { describe, it, expect, beforeAll } from "vitest";
 import algosdk from "algosdk";
-import { Localnet } from "@joe-p/algosdk-localnet";
+import { Localnet } from "@algosdk/localnet";
 import { ARC56AppClient, compileProgram } from "../src/arc56_client";
 import {
   getConstantBlockOffset,
   parseLogicError,
   type ARC56Contract,
-} from "@joe-p/algosdk-composer";
+} from "@algosdk/transaction-composer";
 // Compiled by puya-ts 1.3.1 (puya 5.10.1) from:
 //
 // export class TemplateAssert extends Contract {

@@ -1,12 +1,12 @@
 import { describe, it, expect, vi } from "vitest";
 import algosdk from "algosdk";
 import ts from "typescript";
-import { ARC56AppClient } from "@joe-p/algosdk-app-client";
+import { ARC56AppClient } from "@algosdk/app-client";
 import {
   getTypeScriptValue,
-  Composer,
+  TransactionComposer,
   type ARC56Contract,
-} from "@joe-p/algosdk-composer";
+} from "@algosdk/transaction-composer";
 import { ARC56Generator } from "../src/generator";
 import arc56Json from "../../../fixtures/ARC56Test.arc56.json";
 
@@ -207,7 +207,7 @@ describe("ABI bytes", () => {
       new Uint8Array([1, 2, 3]),
       [new Uint8Array([4, 5]), 6],
     ].entries()) {
-      const group = await new Composer({
+      const group = await new TransactionComposer({
         getSuggestedParams: () =>
           Promise.resolve({
             fee: 1000n,

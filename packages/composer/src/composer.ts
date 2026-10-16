@@ -253,7 +253,7 @@ class ErrorTransformerError extends Error {
   }
 }
 
-export class Composer<TReturns extends unknown[] = []> {
+export class TransactionComposer<TReturns extends unknown[] = []> {
   private static globalErrorTransformers: Set<ErrorTransformer> = new Set();
 
   /**
@@ -262,16 +262,16 @@ export class Composer<TReturns extends unknown[] = []> {
    * returned by the previous one.
    */
   static get errorTransformers(): ReadonlySet<ErrorTransformer> {
-    return Composer.globalErrorTransformers;
+    return TransactionComposer.globalErrorTransformers;
   }
 
   static registerErrorTransformer(transformer: ErrorTransformer) {
-    Composer.globalErrorTransformers.add(transformer);
+    TransactionComposer.globalErrorTransformers.add(transformer);
   }
 
   /** Stop a transformer from being used by composers without their own */
   static unregisterErrorTransformer(transformer: ErrorTransformer) {
-    Composer.globalErrorTransformers.delete(transformer);
+    TransactionComposer.globalErrorTransformers.delete(transformer);
   }
 
   private atc: AtomicTransactionComposer = new AtomicTransactionComposer();
@@ -301,7 +301,7 @@ export class Composer<TReturns extends unknown[] = []> {
     this.getSuggestedParams = opts.getSuggestedParams;
     this.populateAppCallResources = opts.populateAppCallResources ?? true;
     this.errorTransformers =
-      opts.errorTransformers ?? Composer.errorTransformers;
+      opts.errorTransformers ?? TransactionComposer.errorTransformers;
   }
 
   private async transformError(originalError: unknown): Promise<unknown> {
@@ -550,9 +550,9 @@ export class Composer<TReturns extends unknown[] = []> {
 
   addMethodCall<TReturn>(
     params: MethodParams<TReturn>,
-  ): Composer<[...TReturns, TReturn]> {
+  ): TransactionComposer<[...TReturns, TReturn]> {
     this.add({ method: params });
-    return this as unknown as Composer<[...TReturns, TReturn]>;
+    return this as unknown as TransactionComposer<[...TReturns, TReturn]>;
   }
 
   /** (Re)compute the group ID of a group whose transactions were mutated after building */
@@ -690,7 +690,7 @@ export class Composer<TReturns extends unknown[] = []> {
         paidIncludesStaticUsage > 0n ||
         staticUsageFees > 0n
       ) {
-        Composer.regroup(txns);
+        TransactionComposer.regroup(txns);
       }
       this.atc = adjustedAtc;
       return {};
@@ -723,7 +723,7 @@ export class Composer<TReturns extends unknown[] = []> {
 
     // Fees (and possibly resources) changed after the group was built, so the
     // group ID must be recomputed
-    Composer.regroup(txns);
+    TransactionComposer.regroup(txns);
     this.atc = adjustedAtc;
     return {};
   }
@@ -973,7 +973,8 @@ export class Composer<TReturns extends unknown[] = []> {
 
   private async buildGroupOrThrow(algod: Algodv2) {
     const { group, failedSimulation } = await this._buildGroup(algod);
-    if (failedSimulation) Composer.throwSimulationFailure(failedSimulation);
+    if (failedSimulation)
+      TransactionComposer.throwSimulationFailure(failedSimulation);
     return group;
   }
 
@@ -1100,7 +1101,8 @@ export class Composer<TReturns extends unknown[] = []> {
     // The group failed while determining fees. Simulating it again with
     // unadjusted fees would only fail on fees, so return the original failure.
     if (failedSimulation) {
-      if (throwOnFailure) Composer.throwSimulationFailure(failedSimulation);
+      if (throwOnFailure)
+        TransactionComposer.throwSimulationFailure(failedSimulation);
       return {
         simulateResponse: failedSimulation,
         methodResults: [] as unknown as MethodResults<TReturns>,
@@ -1126,7 +1128,7 @@ export class Composer<TReturns extends unknown[] = []> {
       throwOnFailure &&
       result.simulateResponse.txnGroups[0]?.failureMessage
     ) {
-      Composer.throwSimulationFailure(result.simulateResponse);
+      TransactionComposer.throwSimulationFailure(result.simulateResponse);
     }
 
     return {

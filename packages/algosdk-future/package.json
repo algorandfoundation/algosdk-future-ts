@@ -1,7 +1,7 @@
 {
-  "name": "@joe-p/algosdk-future",
+  "name": "@algosdk/future",
   "version": "0.13.0",
-  "description": "algosdk-future: re-exports every algosdk-future package",
+  "description": "Re-exports every @algosdk/future package",
   "repository": {
     "type": "git",
     "url": "https://github.com/joe-p/algosdk-future-ts",
@@ -29,10 +29,10 @@
     "algosdk": "^3.8.0"
   },
   "dependencies": {
-    "@joe-p/algosdk-app-client": "workspace:^",
-    "@joe-p/algosdk-composer": "workspace:^",
-    "@joe-p/algosdk-generator": "workspace:^",
-    "@joe-p/algosdk-localnet": "workspace:^",
+    "@algosdk/app-client": "workspace:^",
+    "@algosdk/transaction-composer": "workspace:^",
+    "@algosdk/typed-client-generator": "workspace:^",
+    "@algosdk/localnet": "workspace:^",
     "algosdk": "^3.8.0"
   }
 }

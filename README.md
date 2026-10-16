@@ -1,4 +1,4 @@
-# algosdk-future
+# @algosdk/future
 
 This library is a light wrapper around algosdk to make it easier to interact with Algorand. The main features are
 
@@ -12,29 +12,38 @@ This library is a light wrapper around algosdk to make it easier to interact wit
 
 ## Packages
 
-| Package                                            | Contents                                                      |
-| -------------------------------------------------- | ------------------------------------------------------------- |
-| [`@joe-p/algosdk-future`](packages/algosdk-future) | Re-exports every package below                                |
-| [`@joe-p/algosdk-composer`](packages/composer)     | Transaction group composer, ARC56 types and utilities         |
-| [`@joe-p/algosdk-app-client`](packages/app-client) | ARC56 app client                                              |
-| [`@joe-p/algosdk-localnet`](packages/localnet)     | Localnet account generation and funding                       |
-| [`@joe-p/algosdk-generator`](packages/generator)   | Typed ARC56 app client generator and the `algosdk-future` CLI |
+| Package                                                 | Contents                                                                                                                                                 |
+| ------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [`@algosdk/future`](packages/algosdk-future)            | Re-exports every package below                                                                                                                           |
+| [`@algosdk/transaction-composer`](packages/composer)    | Transaction composer, ARC56 types and utilities                                                                                                          |
+| [`@algosdk/app-client`](packages/app-client)            | ARC56 app client                                                                                                                                         |
+| [`@algosdk/localnet`](packages/localnet)                | Localnet account generation and funding                                                                                                                  |
+| [`@algosdk/typed-client-generator`](packages/generator) | Typed ARC56 app client generator library and CLI. The generated clients include static types and concrete method implementations based on an ARC56 spec. |
 
-Generated clients import from `@joe-p/algosdk-app-client` and `@joe-p/algosdk-composer`, so projects using them need both packages.
+Generated clients import from `@algosdk/app-client` and `@algosdk/transaction-composer`, so projects using them need both packages.
 
-## Why Not Utils?
+## Long Term Plan
 
-algosdk-future is intentionally much simpler than AlgoKit utils. The abstractions are smaller and the amount of "magic" happening is lower. Some algosdk-future interfaces are more verbose/explicit than AlgoKit Utils, but that is intentional. This makes it easier for agents to understand the library and for humans to review the code.
+`@algosdk/future` represents features that will come to the SDK at a future date. Fast iteration and breakages are expected this early in development, hence `@algosdk/future` is a completely separate repo and package. Long term the plan is as follows
 
-Additionally, algosdk-future uses some new features of algod to do things in a different and breaking way. For example, transactions in algosdk-future have a `feePercent` field rather than an `extraFee` or `maxFee` field. This allows simulate to be used to determine transaction fees rather than relying on hardcoded values.
+1. Publish `@algosdk/future` as a separate package from its own monorepo
+1. Include `@algosdk/future` packages in the upstream [algorand/js-algorand-sdk](https://github.com/algorand/js-algorand-sdk) repository and re-export them under a unstable namespace: `algosdk.future`
+1. Stabilize `@algosdk/future` packages and re-export them at the top level of `algosdk` and publish modular packages for today's `algosdk` functionality (`@algosdk/transact`, `@algosdk/algod-api`, etc.) that are also re-exported (non-breaking change)
+1. Deprecate `algosdk.AtomicTransactionComposer` in favor of `@algosdk/future`'s `TransactionComposer`
+
+## Why Not AlgoKit?
+
+@algosdk/future is intentionally much simpler than AlgoKit. The abstractions are smaller and the amount of "magic" happening is lower. Some @algosdk/future interfaces are more verbose/explicit than AlgoKit Utils, but that is intentional. This makes it easier for agents to understand the library and for humans to review the code.
+
+Additionally, @algosdk/future uses some new features of algod to do things in a different and breaking way. For example, transactions in @algosdk/future have a `feePercent` field rather than an `extraFee` or `maxFee` field. This allows simulate to be used to determine transaction fees rather than relying on hardcoded values.
 
 ## Composer Migration
 
-The general pattern of the composer for both AlgoKit Utils and algosdk-future is more or less the same. The composer takes in transaction parameters and can optionally do some of the mundane work (like setting suggestedParams) under the hood.
+The general pattern of the composer for both AlgoKit Utils and @algosdk/future is more or less the same. The composer takes in transaction parameters and can optionally do some of the mundane work (like setting suggestedParams) under the hood.
 
 ### extraFee and maxFee
 
-#### Utils
+#### AlgoKit
 
 In AlgoKit utils you can use extraFee to hardcode extra fee to cover other transactions. A common use case is covering inner transactions on an app call.
 
@@ -78,9 +87,9 @@ composer.send({ coverAppCallInnerTransactionFees: true });
 
 The problem with this pattern is that it generally requires some assumptions to be made about fee prices which may change under congestion or with consensus updates.
 
-#### algosdk-future
+#### @algosdk/future
 
-algosdk-future does not have a `maxFee` or `extraFee` field. Instead, each transaction has a `feePercent` parameter that defines what proportion of the group's total fee that transaction pays. The algosdk-future composer uses simulate to determine the group's total fee, which is then split across the transactions according to their `feePercent`. This avoids any assumptions needing to be made about fee prices.
+@algosdk/future does not have a `maxFee` or `extraFee` field. Instead, each transaction has a `feePercent` parameter that defines what proportion of the group's total fee that transaction pays. The @algosdk/future composer uses simulate to determine the group's total fee, which is then split across the transactions according to their `feePercent`. This avoids any assumptions needing to be made about fee prices.
 
 ```ts
 composer
@@ -104,7 +113,7 @@ composer
 
 ### Sender and Signer
 
-#### Utils
+#### AlgoKit
 
 In AlgoKit Utils, the sender must be a `string | Address`. If the address is known by the AlgorandClient, then the `TransactionSigner` is implicit
 
@@ -126,9 +135,9 @@ composer.addPayment({
 });
 ```
 
-#### algosdk-future
+#### @algosdk/future
 
-In algosdk-future, the sender must always be a `ComposerSender`, which is defined as `AddressWithTransactionSigner & { emptyTxnSigner?: TransactionSigner }`
+In @algosdk/future, the sender must always be a `ComposerSender`, which is defined as `AddressWithTransactionSigner & { emptyTxnSigner?: TransactionSigner }`
 
 ```ts
 const { activeAddress, transactionSigner } = useWallet();
@@ -158,16 +167,16 @@ composer.addPayment({
   sender,
   receiver,
   amount,
-  feePercent: 1, // algosdk-future will use the sender.emptyTxnSigner during simulate to get the fees required for the pqsig
+  feePercent: 1, // @algosdk/future will use the sender.emptyTxnSigner during simulate to get the fees required for the pqsig
 });
 ```
 
 ### Resource Population
 
-Like utils, the algosdk-future composer populates app call resources by default. The same simulation that determines fees also reports the accounts, apps, assets and boxes that app calls access without referencing, and the composer adds them to the group's reference arrays. App calls that use an access list are left untouched. To turn it off, construct the composer with `populateAppCallResources: false`:
+Like utils, the @algosdk/future composer populates app call resources by default. The same simulation that determines fees also reports the accounts, apps, assets and boxes that app calls access without referencing, and the composer adds them to the group's reference arrays. App calls that use an access list are left untouched. To turn it off, construct the composer with `populateAppCallResources: false`:
 
 ```ts
-const composer = new Composer({
+const composer = new TransactionComposer({
   getSuggestedParams,
   populateAppCallResources: false,
 });
@@ -175,7 +184,7 @@ const composer = new Composer({
 
 ## Typed Client Migration
 
-One of the main reasons projects use AlgoKit Utils is because of the typed client generator. algosdk-future also offers a typed client generator that covers most of the features developers want (namely typed method calls) but there are some abstractions in the Utils version that are not implemented in algosdk-future.
+One of the main reasons projects use AlgoKit Utils is because of the typed client generator. @algosdk/future also offers a typed client generator that covers most of the features developers want (namely typed method calls) but there are some abstractions in the Utils version that are not implemented in @algosdk/future.
 
 ### App Creation, Factory & Deployer
 
@@ -183,7 +192,7 @@ One of the main reasons projects use AlgoKit Utils is because of the typed clien
 
 In Utils, to create a new application you must use the app factory.
 
-##### Utils
+##### AlgoKit
 
 ```ts
 import {
@@ -201,9 +210,9 @@ const { appClient } = factory.send.create.createApplication({
 });
 ```
 
-##### algosdk-future
+##### @algosdk/future
 
-In algosdk-future, there is no Factory class and creation is done via a static method
+In @algosdk/future, there is no Factory class and creation is done via a static method
 
 ```ts
 import { HelloWorldClient } from "../contracts/clients/HelloWorld";
@@ -232,7 +241,7 @@ The state schema comes from the ARC56 contract, and the number of extra program 
 
 #### Idempotent Deployer
 
-AlgoKit Utils includes abstractions for idempotent deployment. This feature uses the note field and indexer to find previous deployments of a contract. algosdk-future does not include a similar feature. If you'd like to track previous deployments, you must implement your own way of recording past deployments (on or off chain).
+AlgoKit Utils includes abstractions for idempotent deployment. This feature uses the note field and indexer to find previous deployments of a contract. @algosdk/future does not include a similar feature. If you'd like to track previous deployments, you must implement your own way of recording past deployments (on or off chain).
 
 ### Overloaded ABI Methods
 
@@ -242,7 +251,7 @@ Generated clients use full-signature keys for overloaded methods, for example `a
 
 ### Typed Composer
 
-#### Utils
+#### AlgoKit
 
 AlgoKit Utils' generated client includes a typed composer for composing a group with one or more typed method calls.
 
@@ -259,12 +268,12 @@ const resultOfMethodOne = result.returns[0];
 const resultOfMethodTwo = result.returns[1];
 ```
 
-#### algosdk-future
+#### @algosdk/future
 
-With algosdk-future, you can use the app client's `params` object to get the parameters to pass to a `Composer`. When calls are chained, the composer tracks each generated method's return type.
+With @algosdk/future, you can use the app client's `params` object to get the parameters to pass to a `TransactionComposer`. When calls are chained, the composer tracks each generated method's return type.
 
 ```ts
-const composer = await new Composer(...)
+const composer = await new TransactionComposer(...)
   .addMethodCall(client.params.methodOne({ args: { arg1: 123 } }))
   .addMethodCall(client.params.methodTwo({ args: { arg1: 'foo' } }))
   .execute(algod)
@@ -280,7 +289,7 @@ If for some reason you cannot chain the `addMethodCalls` calls with the execute,
 ```ts
 import { HelloWorldClient, HelloWorldReturnTypes } from "../contracts/clients/HelloWorld";
 
-const composer = await new Composer(...);
+const composer = await new TransactionComposer(...);
 composer.addMethodCall(client.params.methodOne({ args: { arg1: 123 } }));
 composer.addMethodCall(client.params.methodTwo({ args: { arg1: 'foo' } }));
 const result = composer.execute(algod);

@@ -2,10 +2,13 @@ import { describe, it, expect, beforeAll, vi } from "vitest";
 import algosdk from "algosdk";
 import ts from "typescript";
 import * as path from "path";
-import { Localnet } from "@joe-p/algosdk-localnet";
-import { ARC56AppClient } from "@joe-p/algosdk-app-client";
+import { Localnet } from "@algosdk/localnet";
+import { ARC56AppClient } from "@algosdk/app-client";
 import { ARC56Generator } from "../src/generator";
-import type { MethodParams, ARC56Contract } from "@joe-p/algosdk-composer";
+import type {
+  MethodParams,
+  ARC56Contract,
+} from "@algosdk/transaction-composer";
 
 const selector = (signature: string) =>
   `pushbytes 0x${Buffer.from(algosdk.ABIMethod.fromSignature(signature).getSelector()).toString("hex")}`;

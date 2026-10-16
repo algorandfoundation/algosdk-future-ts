@@ -1,7 +1,7 @@
 {
-  "name": "@joe-p/algosdk-generator",
+  "name": "@algosdk/typed-client-generator",
   "version": "0.4.0",
-  "description": "Typed ARC-56 client generator and CLI for algosdk-future",
+  "description": "Typed ARC-56 client generator and CLI for @algosdk/future",
   "repository": {
     "type": "git",
     "url": "https://github.com/joe-p/algosdk-future-ts",
@@ -32,7 +32,7 @@
     "algosdk": "^3.8.0"
   },
   "dependencies": {
-    "@joe-p/algosdk-composer": "workspace:^",
+    "@algosdk/transaction-composer": "workspace:^",
     "algosdk": "^3.8.0",
     "prettier": "^3.9.6"
   }

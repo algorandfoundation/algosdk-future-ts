@@ -1,11 +1,11 @@
-# @joe-p/algosdk-generator
+# @algosdk/typed-client-generator
 
-The algosdk-future typed ARC56 app client generator and the `algosdk-future` CLI.
+The `@algosdk/future` typed ARC56 app client generator and the `algosdk-future` CLI.
 
 ```sh
-npx @joe-p/algosdk-generator <arc56.json> -o <output.ts>
+npx @algosdk/typed-client-generator <arc56.json> -o <output.ts>
 ```
 
-Generated clients import from `@joe-p/algosdk-app-client` and `@joe-p/algosdk-composer`, so projects using them need both packages.
+Generated clients import from `@algosdk/app-client` and `@algosdk/transaction-composer`, so projects using them need both packages.
 
-See the [algosdk-future README](https://github.com/joe-p/algosdk-future-ts#readme) for documentation.
+See the [`@algosdk/future` README](https://github.com/joe-p/algosdk-future-ts#readme) for documentation.

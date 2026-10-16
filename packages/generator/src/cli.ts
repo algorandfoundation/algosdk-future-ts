@@ -2,7 +2,7 @@
 import * as fs from "fs";
 import * as path from "path";
 import { ARC56Generator } from "./generator.ts";
-import type { ARC56Contract } from "@joe-p/algosdk-composer";
+import type { ARC56Contract } from "@algosdk/transaction-composer";
 
 const HELP = `
 algosdk-future: typed client generator
@@ -18,11 +18,11 @@ Options:
       --app-client-import-path <path>
                             Module specifier the generated client imports the
                             app client from
-                            (default: "@joe-p/algosdk-app-client")
+                            (default: "@algosdk/app-client")
       --composer-import-path <path>
                             Module specifier the generated client imports
                             composer and ARC-56 types from
-                            (default: "@joe-p/algosdk-composer")
+                            (default: "@algosdk/transaction-composer")
   -h, --help                Show this help message
   -v, --version             Print the version
 `;

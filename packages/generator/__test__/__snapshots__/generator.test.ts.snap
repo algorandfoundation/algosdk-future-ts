@@ -8,12 +8,12 @@ import {
   type AppClientMethodParams,
   type CreateMethodParams,
   type MethodExecutionResult,
-} from "@joe-p/algosdk-app-client";
+} from "@algosdk/app-client";
 import {
   type MethodParams,
   type PaymentParams,
   type ARC56Contract,
-} from "@joe-p/algosdk-composer";
+} from "@algosdk/transaction-composer";
 
 type TypedMethodParams<TArgs = undefined> = Omit<
   AppClientMethodParams,

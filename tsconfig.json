@@ -17,11 +17,11 @@
     // Resolve workspace packages to their sources, so tests and type checks
     // don't need the packages to be built
     "paths": {
-      "@joe-p/algosdk-future": ["./packages/algosdk-future/src/index.ts"],
-      "@joe-p/algosdk-composer": ["./packages/composer/src/index.ts"],
-      "@joe-p/algosdk-app-client": ["./packages/app-client/src/index.ts"],
-      "@joe-p/algosdk-localnet": ["./packages/localnet/src/index.ts"],
-      "@joe-p/algosdk-generator": ["./packages/generator/src/index.ts"]
+      "@algosdk/future": ["./packages/algosdk-future/src/index.ts"],
+      "@algosdk/transaction-composer": ["./packages/composer/src/index.ts"],
+      "@algosdk/app-client": ["./packages/app-client/src/index.ts"],
+      "@algosdk/localnet": ["./packages/localnet/src/index.ts"],
+      "@algosdk/typed-client-generator": ["./packages/generator/src/index.ts"]
     },
 
     // Best practices

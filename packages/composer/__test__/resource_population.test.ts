@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll } from "vitest";
 import algosdk from "algosdk";
-import { Localnet } from "@joe-p/algosdk-localnet";
-import { Composer } from "../src/composer";
+import { Localnet } from "@algosdk/localnet";
+import { TransactionComposer } from "../src/composer";
 import { populateAppCallResources } from "../src/resource_population";
 
 // Accesses whichever resource the first app arg names, without it being in
@@ -163,7 +163,7 @@ describe("App call resource population", () => {
     });
 
     it(`fails on an unreferenced ${name} when population is disabled`, async () => {
-      const composer = new Composer({
+      const composer = new TransactionComposer({
         getSuggestedParams: () => localnet.algod.getTransactionParams().do(),
         populateAppCallResources: false,
       });

@@ -5,17 +5,17 @@ import {
   type StructFields,
   type StructField,
   type Method,
-} from "@joe-p/algosdk-composer";
+} from "@algosdk/transaction-composer";
 
 export interface ARC56GeneratorOptions {
   /**
    * The module specifier the generated client imports the app client from.
-   * Defaults to "@joe-p/algosdk-app-client".
+   * Defaults to "@algosdk/app-client".
    */
   appClientImportPath?: string;
   /**
    * The module specifier the generated client imports composer and ARC-56
-   * types from. Defaults to "@joe-p/algosdk-composer".
+   * types from. Defaults to "@algosdk/transaction-composer".
    */
   composerImportPath?: string;
 }
@@ -27,8 +27,8 @@ export class ARC56Generator {
   constructor(arc56: ARC56Contract, options: ARC56GeneratorOptions = {}) {
     this.arc56 = arc56;
     this.options = {
-      appClientImportPath: "@joe-p/algosdk-app-client",
-      composerImportPath: "@joe-p/algosdk-composer",
+      appClientImportPath: "@algosdk/app-client",
+      composerImportPath: "@algosdk/transaction-composer",
       ...options,
     };
   }
@@ -691,9 +691,9 @@ export class ARC56Generator {
 
   async generate(): Promise<string> {
     const appClientImportPath =
-      this.options.appClientImportPath ?? "@joe-p/algosdk-app-client";
+      this.options.appClientImportPath ?? "@algosdk/app-client";
     const composerImportPath =
-      this.options.composerImportPath ?? "@joe-p/algosdk-composer";
+      this.options.composerImportPath ?? "@algosdk/transaction-composer";
     const hasBareCreate = (this.arc56.bareActions?.create ?? []).length > 0;
 
     const bareImports = hasBareCreate

@@ -2,9 +2,9 @@ import { describe, it, expect, beforeAll, vi } from "vitest";
 import algosdk from "algosdk";
 import * as path from "path";
 import * as fs from "fs";
-import { Localnet } from "@joe-p/algosdk-localnet";
+import { Localnet } from "@algosdk/localnet";
 import { ARC56Generator } from "../src/generator";
-import type { ARC56Contract } from "@joe-p/algosdk-composer";
+import type { ARC56Contract } from "@algosdk/transaction-composer";
 import type { ARC56TestReturnTypes } from "../example/ARC56TestClient";
 import { ARC56TestClient } from "../example/ARC56TestClient";
 import arc56Json from "../../../fixtures/ARC56Test.arc56.json";
@@ -365,7 +365,7 @@ describe("ARC56Generator", () => {
       },
     });
 
-    // 6. Composer integration via params()
+    // 6. TransactionComposer integration via params()
     const compResult = await localnet
       .composer()
       .addMethodCall(

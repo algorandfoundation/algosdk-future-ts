@@ -6,7 +6,7 @@ import algosdk, {
   type Ed25519SigningKey,
 } from "algosdk";
 import nacl from "tweetnacl";
-import { Composer } from "@joe-p/algosdk-composer";
+import { TransactionComposer } from "@algosdk/transaction-composer";
 
 export const DEFAULT_LOCALNET_TOKEN = "a".repeat(64);
 export const DEFAULT_LOCALNET_HOST = "http://localhost";
@@ -94,7 +94,7 @@ export class Localnet {
   }
 
   composer() {
-    return new Composer({
+    return new TransactionComposer({
       getSuggestedParams: () => {
         return this.algod.getTransactionParams().do();
       },

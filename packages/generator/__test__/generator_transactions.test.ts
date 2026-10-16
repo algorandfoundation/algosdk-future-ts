@@ -2,7 +2,10 @@ import { describe, it, expect } from "vitest";
 import algosdk from "algosdk";
 import ts from "typescript";
 import { ARC56Generator } from "../src/generator";
-import { Composer, type ARC56Contract } from "@joe-p/algosdk-composer";
+import {
+  TransactionComposer,
+  type ARC56Contract,
+} from "@algosdk/transaction-composer";
 
 const transactionTypes = ["axfer", "afrz", "keyreg", "appl", "acfg", "txn"];
 const arc56: ARC56Contract = {
@@ -145,7 +148,7 @@ client.call.accept_pay({ sender, args: { transaction: payment } });
       const makeTransaction = transactions[type];
       if (!makeTransaction) throw new Error(`Missing transaction for ${type}`);
       const txn = makeTransaction();
-      const group = await new Composer({
+      const group = await new TransactionComposer({
         getSuggestedParams: () => Promise.resolve(suggestedParams),
       })
         .addMethodCall({

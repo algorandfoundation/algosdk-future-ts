@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import algosdk from "algosdk";
-import { Composer } from "../src/composer";
+import { TransactionComposer } from "../src/composer";
 
 function setup() {
   const account = algosdk.generateAccount();
@@ -53,7 +53,7 @@ function setup() {
       do: () => Promise.resolve({ confirmedRound: 2n }),
     }),
   } as unknown as algosdk.Algodv2;
-  const composer = new Composer({ getSuggestedParams }).addPayment({
+  const composer = new TransactionComposer({ getSuggestedParams }).addPayment({
     sender,
     receiver: sender.address,
     amount: 100_000n,
@@ -90,7 +90,7 @@ async function expectFailure(result: Promise<unknown>, message: string) {
   expect(error.message).toContain(message);
 }
 
-describe("Composer retries", () => {
+describe("TransactionComposer retries", () => {
   for (const first of ["execute", "simulate", "buildGroup"] as const) {
     for (const retry of ["execute", "simulate", "buildGroup"] as const) {
       it(`should retry fee simulation after failed ${first} on ${retry}`, async () => {
@@ -186,12 +186,14 @@ describe("Composer retries", () => {
 
   it("should not duplicate explicit fee shares on retry", async () => {
     const { algod, sender, getSuggestedParams, simulateTransactions } = setup();
-    const composer = new Composer({ getSuggestedParams }).addPayment({
-      sender,
-      receiver: sender.address,
-      amount: 100_000n,
-      feePercent: 1,
-    });
+    const composer = new TransactionComposer({ getSuggestedParams }).addPayment(
+      {
+        sender,
+        receiver: sender.address,
+        amount: 100_000n,
+        feePercent: 1,
+      },
+    );
     simulateTransactions.mockRejectedValueOnce(new TypeError("fetch failed"));
     await expectFailure(composer.execute(algod), "fetch failed");
     expect((await composer.execute(algod)).txIDs).toHaveLength(1);
@@ -205,7 +207,10 @@ describe("Composer retries", () => {
       amount: 100_000n,
       suggestedParams: { ...suggestedParams, fee: 1_000n, flatFee: true },
     });
-    const composer = new Composer({}).addTransaction(txn, sender.txnSigner);
+    const composer = new TransactionComposer({}).addTransaction(
+      txn,
+      sender.txnSigner,
+    );
     simulateTransactions.mockRejectedValueOnce(new TypeError("fetch failed"));
     await expectFailure(composer.execute(algod), "fetch failed");
     expect((await composer.execute(algod)).txIDs).toHaveLength(1);
@@ -219,7 +224,9 @@ describe("Composer retries", () => {
       amount: 100_000n,
       suggestedParams: { ...suggestedParams, fee: 0n, flatFee: true },
     });
-    const composer = new Composer({ getSuggestedParams }).addMethodCall({
+    const composer = new TransactionComposer({
+      getSuggestedParams,
+    }).addMethodCall({
       appID: 1n,
       method: algosdk.ABIMethod.fromSignature("deposit(pay)void"),
       sender,

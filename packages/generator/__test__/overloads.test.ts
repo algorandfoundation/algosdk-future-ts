@@ -1,13 +1,13 @@
 import { describe, it, expect, vi } from "vitest";
 import algosdk from "algosdk";
 import ts from "typescript";
-import { ARC56AppClient } from "@joe-p/algosdk-app-client";
+import { ARC56AppClient } from "@algosdk/app-client";
 import {
   getAbiMethod,
   decodeMethodReturnValue,
-  Composer,
+  TransactionComposer,
   type ARC56Contract,
-} from "@joe-p/algosdk-composer";
+} from "@algosdk/transaction-composer";
 import { ARC56Generator } from "../src/generator";
 import arc56Json from "../../../fixtures/ARC56Test.arc56.json";
 
@@ -90,7 +90,7 @@ describe("ABI overloads", () => {
           { arc56, appID: 1n, method, sender, methodArgs: args },
           params,
         ]) {
-          const group = await new Composer({
+          const group = await new TransactionComposer({
             getSuggestedParams: () => Promise.resolve(suggestedParams),
           })
             .addMethodCall(call)
@@ -123,7 +123,7 @@ describe("ABI overloads", () => {
       decodeMethodReturnValue(arc56, "bar", new Uint8Array()),
     ).toThrow(message);
     await expect(
-      new Composer({
+      new TransactionComposer({
         getSuggestedParams: () => Promise.resolve(suggestedParams),
       })
         .addMethodCall({ arc56, appID: 1n, method: "bar", sender })
@@ -146,7 +146,7 @@ describe("ABI overloads", () => {
           makeClient().decodeMethodReturnValue(method, new Uint8Array()),
         ).toThrow(message);
         await expect(
-          new Composer({
+          new TransactionComposer({
             getSuggestedParams: () => Promise.resolve(suggestedParams),
           })
             .addMethodCall({
@@ -200,7 +200,7 @@ describe("ABI overloads", () => {
       7n,
     ]);
     for (const identifier of [method, method.getSignature()]) {
-      const composer = new Composer({}).addMethodCall({
+      const composer = new TransactionComposer({}).addMethodCall({
         arc56: definition,
         appID: 1n,
         method: identifier,
@@ -226,18 +226,20 @@ describe("ABI overloads", () => {
     if (!voidMethod) throw new Error("Expected void method");
     voidMethod.actions = { create: [], call: ["OptIn"] };
     const method = algosdk.ABIMethod.fromSignature("bar(uint64)uint64");
-    const execute = vi.spyOn(Composer.prototype, "execute").mockResolvedValue({
-      confirmedRound: 1n,
-      txIDs: ["offline"],
-      methodResults: [
-        {
-          txID: "offline",
-          method,
-          rawReturnValue: algosdk.encodeUint64(42n),
-          returnValue: 42n,
-        },
-      ],
-    });
+    const execute = vi
+      .spyOn(TransactionComposer.prototype, "execute")
+      .mockResolvedValue({
+        confirmedRound: 1n,
+        txIDs: ["offline"],
+        methodResults: [
+          {
+            txID: "offline",
+            method,
+            rawReturnValue: algosdk.encodeUint64(42n),
+            returnValue: 42n,
+          },
+        ],
+      });
     try {
       for (const identifier of [method, method.getSignature()]) {
         for (const appId of [0n, 1n]) {

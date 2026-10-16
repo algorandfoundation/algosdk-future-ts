@@ -1,7 +1,7 @@
 {
-  "name": "@joe-p/algosdk-localnet",
+  "name": "@algosdk/localnet",
   "version": "0.3.0",
-  "description": "LocalNet helpers for algosdk-future",
+  "description": "LocalNet helpers for @algosdk/future",
   "repository": {
     "type": "git",
     "url": "https://github.com/joe-p/algosdk-future-ts",
@@ -29,7 +29,7 @@
     "algosdk": "^3.8.0"
   },
   "dependencies": {
-    "@joe-p/algosdk-composer": "workspace:^",
+    "@algosdk/transaction-composer": "workspace:^",
     "algosdk": "^3.8.0",
     "tweetnacl": "^1.0.3"
   }

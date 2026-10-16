@@ -44,25 +44,25 @@ importers:
 
   packages/algosdk-future:
     dependencies:
-      '@joe-p/algosdk-app-client':
+      '@algosdk/app-client':
         specifier: workspace:^
         version: link:../app-client
-      '@joe-p/algosdk-composer':
-        specifier: workspace:^
-        version: link:../composer
-      '@joe-p/algosdk-generator':
-        specifier: workspace:^
-        version: link:../generator
-      '@joe-p/algosdk-localnet':
+      '@algosdk/localnet':
         specifier: workspace:^
         version: link:../localnet
+      '@algosdk/transaction-composer':
+        specifier: workspace:^
+        version: link:../composer
+      '@algosdk/typed-client-generator':
+        specifier: workspace:^
+        version: link:../generator
       algosdk:
         specifier: ^3.8.0
         version: 3.8.0
 
   packages/app-client:
     dependencies:
-      '@joe-p/algosdk-composer':
+      '@algosdk/transaction-composer':
         specifier: workspace:^
         version: link:../composer
       algosdk:
@@ -77,7 +77,7 @@ importers:
 
   packages/generator:
     dependencies:
-      '@joe-p/algosdk-composer':
+      '@algosdk/transaction-composer':
         specifier: workspace:^
         version: link:../composer
       algosdk:
@@ -89,7 +89,7 @@ importers:
 
   packages/localnet:
     dependencies:
-      '@joe-p/algosdk-composer':
+      '@algosdk/transaction-composer':
         specifier: workspace:^
         version: link:../composer
       algosdk:

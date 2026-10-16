@@ -1,9 +1,9 @@
 import { describe, it, expect, beforeAll } from "vitest";
 import algosdk, { type Falcon1024SigningKey } from "algosdk";
-import { Localnet } from "@joe-p/algosdk-localnet";
-import { ARC56AppClient } from "@joe-p/algosdk-app-client";
+import { Localnet } from "@algosdk/localnet";
+import { ARC56AppClient } from "@algosdk/app-client";
 import {
-  Composer,
+  TransactionComposer,
   type ErrorTransformer,
   type MethodResult,
 } from "../src/composer";
@@ -28,7 +28,7 @@ function getTxn(
   return t;
 }
 
-describe("Composer ARC56", () => {
+describe("TransactionComposer ARC56", () => {
   const localnet = new Localnet();
   const arc56 = arc56Json as unknown as ARC56Contract;
   let sender: algosdk.AddressWithTransactionSigner;
@@ -398,10 +398,10 @@ describe("Composer ARC56", () => {
   it("should apply error transformers in order, and wrap a failing transformer", async () => {
     const underpaying = (
       errorTransformers: ConstructorParameters<
-        typeof Composer
+        typeof TransactionComposer
       >[0]["errorTransformers"],
     ) =>
-      new Composer({
+      new TransactionComposer({
         getSuggestedParams: () => localnet.algod.getTransactionParams().do(),
         errorTransformers,
       }).addPayment({
@@ -465,13 +465,13 @@ describe("Composer ARC56", () => {
     };
 
     // Replaces the transformer of the client created in beforeAll
-    const registered = Composer.errorTransformers.size;
+    const registered = TransactionComposer.errorTransformers.size;
     const client = new ARC56AppClient({ arc56, algod: localnet.algod, appId });
-    expect(Composer.errorTransformers.size).toBe(registered);
+    expect(TransactionComposer.errorTransformers.size).toBe(registered);
     await expectMapped();
 
     client.unregisterErrorTransformer();
-    expect(Composer.errorTransformers.size).toBe(registered - 1);
+    expect(TransactionComposer.errorTransformers.size).toBe(registered - 1);
     expect(((await failingCall()) as Error).message).not.toMatch(
       /^Runtime error/,
     );
@@ -484,7 +484,7 @@ describe("Composer ARC56", () => {
     });
     new ARC56AppClient({ arc56, algod: localnet.algod, appId });
     replaced.unregisterErrorTransformer();
-    expect(Composer.errorTransformers.size).toBe(registered);
+    expect(TransactionComposer.errorTransformers.size).toBe(registered);
     await expectMapped();
   });
 
@@ -535,7 +535,7 @@ describe("Composer ARC56", () => {
     );
   });
 
-  it("should support latest ARC56 StructField[] format in Composer", async () => {
+  it("should support latest ARC56 StructField[] format in TransactionComposer", async () => {
     const arc56LatestStructs: ARC56Contract = {
       ...arc56,
       structs: {
@@ -586,7 +586,7 @@ describe("Composer ARC56", () => {
     });
   });
 
-  it("should automatically decode return value when getParams from ARC56AppClient is passed to Composer", async () => {
+  it("should automatically decode return value when getParams from ARC56AppClient is passed to TransactionComposer", async () => {
     const appClient = new ARC56AppClient({
       arc56,
       appId,
@@ -704,7 +704,7 @@ describe("Composer ARC56", () => {
   });
 
   it("should cover a zero-fee transaction with feePercent: 1", async () => {
-    const composer = new Composer({
+    const composer = new TransactionComposer({
       getSuggestedParams: () => localnet.algod.getTransactionParams().do(),
     });
 
@@ -737,7 +737,7 @@ describe("Composer ARC56", () => {
   });
 
   it("should cover a large transaction with feePercent: 1", async () => {
-    const composer = new Composer({
+    const composer = new TransactionComposer({
       getSuggestedParams: () => localnet.algod.getTransactionParams().do(),
     });
 
@@ -765,7 +765,7 @@ describe("Composer ARC56", () => {
 
     const pqSender =
       algosdk.addressWithSignersFromRawFalcon1024Signer(emptyFalcon);
-    const composer = new Composer({
+    const composer = new TransactionComposer({
       getSuggestedParams: () => localnet.algod.getTransactionParams().do(),
     });
     await localnet.fundAccount(pqSender.address, 1_000_000n);
@@ -783,7 +783,7 @@ describe("Composer ARC56", () => {
   });
 
   it("should distribute the group fee across transactions that don't specify feePercent", async () => {
-    const composer = new Composer({
+    const composer = new TransactionComposer({
       getSuggestedParams: () => localnet.algod.getTransactionParams().do(),
     });
 
@@ -809,7 +809,7 @@ describe("Composer ARC56", () => {
   });
 
   it("should throw error when feePercent values don't sum to 1", async () => {
-    const composer = new Composer({
+    const composer = new TransactionComposer({
       getSuggestedParams: () => localnet.algod.getTransactionParams().do(),
     });
 
@@ -832,7 +832,7 @@ describe("Composer ARC56", () => {
   });
 
   it("should not change the fee of a transaction with a staticFee", async () => {
-    const composer = new Composer({
+    const composer = new TransactionComposer({
       getSuggestedParams: () => localnet.algod.getTransactionParams().do(),
     });
 
@@ -897,7 +897,7 @@ describe("Composer ARC56", () => {
   });
 
   it("should split the group fee across a staticUsage and an equal-split transaction", async () => {
-    const composer = new Composer({
+    const composer = new TransactionComposer({
       getSuggestedParams: () => localnet.algod.getTransactionParams().do(),
     });
 
@@ -944,7 +944,7 @@ describe("Composer ARC56", () => {
 
   it("should throw error when staticUsage is combined with staticFee", () => {
     expect(() =>
-      new Composer({
+      new TransactionComposer({
         getSuggestedParams: () => localnet.algod.getTransactionParams().do(),
       }).addPayment({
         sender,
@@ -958,7 +958,7 @@ describe("Composer ARC56", () => {
 
   it("should throw error when staticUsage is combined with feePercent", () => {
     expect(() =>
-      new Composer({
+      new TransactionComposer({
         getSuggestedParams: () => localnet.algod.getTransactionParams().do(),
       }).addPayment({
         sender,
@@ -971,7 +971,7 @@ describe("Composer ARC56", () => {
   });
 
   it("should not change the fee of a transaction within its maxUsage", async () => {
-    const composer = new Composer({
+    const composer = new TransactionComposer({
       getSuggestedParams: () => localnet.algod.getTransactionParams().do(),
     });
 
@@ -988,7 +988,7 @@ describe("Composer ARC56", () => {
   });
 
   it("should throw when a transaction's fee exceeds its maxUsage", async () => {
-    const composer = new Composer({
+    const composer = new TransactionComposer({
       getSuggestedParams: () => localnet.algod.getTransactionParams().do(),
     });
 
@@ -1006,7 +1006,7 @@ describe("Composer ARC56", () => {
   });
 
   it("should throw on simulate when a transaction's fee exceeds its maxUsage", async () => {
-    const composer = new Composer({
+    const composer = new TransactionComposer({
       getSuggestedParams: () => localnet.algod.getTransactionParams().do(),
     });
 
@@ -1025,7 +1025,7 @@ describe("Composer ARC56", () => {
 
   it("should throw error when maxUsage is combined with staticUsage", () => {
     expect(() =>
-      new Composer({
+      new TransactionComposer({
         getSuggestedParams: () => localnet.algod.getTransactionParams().do(),
       }).addPayment({
         sender,
@@ -1360,7 +1360,7 @@ describe("Composer ARC56", () => {
   });
 
   it("should build each app call variant with its own onComplete", async () => {
-    const cases: Array<[string, (c: Composer) => void, number]> = [
+    const cases: Array<[string, (c: TransactionComposer) => void, number]> = [
       ["addAppUpdate", (c) => c.addAppUpdate({ sender, appID: appId }), 4],
       ["addAppDelete", (c) => c.addAppDelete({ sender, appID: appId }), 5],
       ["addAppCloseOut", (c) => c.addAppCloseOut({ sender, appID: appId }), 2],

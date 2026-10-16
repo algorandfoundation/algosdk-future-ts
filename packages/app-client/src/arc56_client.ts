@@ -4,7 +4,7 @@ import algosdk, {
   type SuggestedParams,
 } from "algosdk";
 import {
-  Composer,
+  TransactionComposer,
   type AppCreateParams,
   type ComposerSender,
   type ErrorTransformer,
@@ -20,7 +20,7 @@ import {
   decodeMethodReturnValue as utilsDecodeMethodReturnValue,
   getAbiMethod,
   parseLogicError,
-} from "@joe-p/algosdk-composer";
+} from "@algosdk/transaction-composer";
 
 /** Bytes of program that fit in a single application program page */
 const APP_PAGE_SIZE = 2048;
@@ -244,7 +244,7 @@ export type DecodedState = {
 type RawStateEntry = { key: Uint8Array; value: Uint8Array };
 
 /**
- * The error transformer registered with Composer for each app id. Only one
+ * The error transformer registered with TransactionComposer for each app id. Only one
  * client's transformer is registered per app, so creating clients for the same
  * app repeatedly doesn't grow the registered transformers.
  */
@@ -296,15 +296,15 @@ export class ARC56AppClient {
       // The newest client for an app replaces the transformer of any previous
       // one, e.g. so errors are mapped with the latest ARC56 spec
       const previous = registeredErrorTransformers.get(this.appId);
-      if (previous) Composer.unregisterErrorTransformer(previous);
+      if (previous) TransactionComposer.unregisterErrorTransformer(previous);
       registeredErrorTransformers.set(this.appId, this.errorTransformer);
-      Composer.registerErrorTransformer(this.errorTransformer);
+      TransactionComposer.registerErrorTransformer(this.errorTransformer);
     }
   }
 
   /**
    * Map logic errors from this app to their ARC56 error messages. Registered
-   * with every Composer once the app id is known, until another client for the
+   * with every TransactionComposer once the app id is known, until another client for the
    * same app is created.
    */
   private readonly errorTransformer: ErrorTransformer = async (e) => {
@@ -344,18 +344,18 @@ export class ARC56AppClient {
       return;
     }
     registeredErrorTransformers.delete(this.appId);
-    Composer.unregisterErrorTransformer(this.errorTransformer);
+    TransactionComposer.unregisterErrorTransformer(this.errorTransformer);
   }
 
   /** A composer that maps errors from this app, even while it is created */
   private newComposer() {
-    return new Composer({
+    return new TransactionComposer({
       getSuggestedParams:
         this.getSuggestedParams ??
         (() => this.algod.getTransactionParams().do()),
       errorTransformers: new Set([
         this.errorTransformer,
-        ...Composer.errorTransformers,
+        ...TransactionComposer.errorTransformers,
       ]),
     });
   }
