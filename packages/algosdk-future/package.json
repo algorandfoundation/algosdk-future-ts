@@ -1,6 +1,6 @@
 {
   "name": "@algosdk/future",
-  "version": "0.13.0",
+  "version": "0.14.0",
   "description": "Re-exports every @algosdk/future package",
   "repository": {
     "type": "git",
@@ -30,9 +30,9 @@
   },
   "dependencies": {
     "@algosdk/app-client": "workspace:^",
+    "@algosdk/localnet": "workspace:^",
     "@algosdk/transaction-composer": "workspace:^",
     "@algosdk/typed-client-generator": "workspace:^",
-    "@algosdk/localnet": "workspace:^",
     "algosdk": "^3.8.0"
   }
 }

@@ -1,3 +1,10 @@
+# 0.14.0 - October 16th, 2026
+
+## Breaking Changes
+
+- Publish as `@algosdk/future` (previously `@joe-p/algosdk-future`), re-exporting the renamed `@algosdk/*` packages.
+- Rename the `Composer` class to `TransactionComposer`.
+
 # 0.13.0 - October 15th, 2026
 
 ## Breaking Changes
