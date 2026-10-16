@@ -1,3 +1,10 @@
+# 0.5.0 - October 16th, 2026
+
+## Breaking Changes
+
+- Publish as `@algosdk/typed-client-generator` (previously `@joe-p/algosdk-generator`).
+- Generated clients import from `@algosdk/app-client` and `@algosdk/transaction-composer`, and the CLI's default import paths are updated to match.
+
 # 0.4.0 - October 15th, 2026
 
 ## Breaking Changes
