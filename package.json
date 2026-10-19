@@ -9,10 +9,14 @@
     "build": "pnpm -r run build",
     "check": "pnpm run lint && pnpm run format && pnpm run check-types",
     "test": "vitest run",
+    "generate:fixtures": "tsx scripts/generate-fixtures.ts",
     "cli": "tsx packages/generator/src/cli.ts",
     "localnet": "go run github.com/joe-p/algokit-cli-go/cmd/algokit@v0.1.0 localnet"
   },
   "devDependencies": {
+    "@algorandfoundation/algorand-typescript": "1.3.1",
+    "@algorandfoundation/puya-ts": "1.3.1",
+    "@algorandfoundation/tealscript": "0.107.2",
     "@eslint/js": "^10.0.1",
     "@types/node": "^24.19.1",
     "algosdk": "^3.8.0",

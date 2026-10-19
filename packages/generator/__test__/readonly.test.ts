@@ -5,168 +5,31 @@ import * as path from "path";
 import { Localnet } from "@algosdk/localnet";
 import { ARC56AppClient } from "@algosdk/app-client";
 import { ARC56Generator } from "../src/generator";
+import { loadContract } from "../../../fixtures/arc56-test";
+import { getConstantBlockOffset } from "@algosdk/transaction-composer";
 import type {
   MethodParams,
   ARC56Contract,
 } from "@algosdk/transaction-composer";
 
-const selector = (signature: string) =>
-  `pushbytes 0x${Buffer.from(algosdk.ABIMethod.fromSignature(signature).getSelector()).toString("hex")}`;
-const GET_POINT = selector("getPoint(uint64)(uint64,uint64)");
-
-// The constant blocks let the "cblocks" pcOffsetMethod be tested
-const APPROVAL = `#pragma version 10
-intcblock 0 1 2
-bytecblock 0x151f7c75
-txn ApplicationID
-bz create
-txn OnCompletion
-intc_0
-==
-assert
-txna ApplicationArgs 0
-${GET_POINT}
-${selector("mustBePositive(uint64)uint64")}
-${selector("callOther(uint64)uint64")}
-${selector("write()void")}
-${selector("getSeven()uint64")}
-uncover 5
-match getPoint mustBePositive callOther write getSeven
-err
-create:
-intc_1
-return
-getPoint:
-bytec_0
-txna ApplicationArgs 1
-concat
-txna ApplicationArgs 1
-btoi
-intc_2
-*
-itob
-concat
-log
-intc_1
-return
-mustBePositive:
-txna ApplicationArgs 1
-btoi
-intc_0
->
-assert // MUST_BE_POSITIVE
-bytec_0
-txna ApplicationArgs 1
-concat
-log
-intc_1
-return
-callOther:
-itxn_begin
-pushint 6
-itxn_field TypeEnum
-txna ApplicationArgs 1
-btoi
-itxn_field ApplicationID
-${GET_POINT}
-itxn_field ApplicationArgs
-pushint 7
-itob
-itxn_field ApplicationArgs
-intc_0
-itxn_field Fee
-itxn_submit
-bytec_0
-itxn LastLog
-extract 12 8
-concat
-log
-intc_1
-return
-write:
-intc_1
-return
-getSeven:
-bytec_0
-pushint 7
-itob
-concat
-log
-intc_1
-return`;
-
-const CLEAR = `#pragma version 10
-pushint 1
-return`;
-
-const methods: ARC56Contract["methods"] = [
-  {
-    name: "getPoint",
-    args: [{ name: "x", type: "uint64" }],
-    returns: { type: "(uint64,uint64)", struct: "Point" },
-    actions: { create: [], call: ["NoOp"] },
-    readonly: true,
-  },
-  {
-    name: "mustBePositive",
-    args: [{ name: "n", type: "uint64" }],
-    returns: { type: "uint64" },
-    actions: { create: [], call: ["NoOp"] },
-    readonly: true,
-  },
-  {
-    name: "callOther",
-    args: [{ name: "appId", type: "uint64" }],
-    returns: { type: "uint64" },
-    actions: { create: [], call: ["NoOp"] },
-    readonly: true,
-  },
-  {
-    name: "write",
-    args: [],
-    returns: { type: "void" },
-    actions: { create: [], call: ["NoOp"] },
-  },
-  {
-    name: "getSeven",
-    args: [],
-    returns: { type: "uint64" },
-    actions: { create: [], call: ["NoOp"] },
-    readonly: true,
-  },
-];
+const readonlyContract = loadContract("Readonly");
+const byteCode = readonlyContract.byteCode;
+if (!byteCode) throw new Error("missing compiler bytecode");
+const constantBlockOffset = getConstantBlockOffset(
+  algosdk.base64ToBytes(byteCode.approval),
+);
 
 describe("readonly methods", () => {
   const localnet = new Localnet();
   let dispenser: algosdk.AddressWithTransactionSigner;
-  let approval: Uint8Array;
-  let clear: Uint8Array;
   /** pc of the assert in mustBePositive */
   let assertPc: number;
 
   /** The contract, with the assert's error message in the given format */
   const contract = (
-    sourceInfo: "array" | "cblocks" | "none",
+    sourceInfo: "compiler" | "array" | "cblocks" | "none" = "compiler",
   ): ARC56Contract => ({
-    arcs: [4, 56],
-    name: "Readonly",
-    structs: {
-      Point: [
-        { name: "x", type: "uint64" },
-        { name: "y", type: "uint64" },
-      ],
-    },
-    state: {
-      schema: { global: { ints: 0, bytes: 0 }, local: { ints: 0, bytes: 0 } },
-      keys: { global: {}, local: {}, box: {} },
-      maps: { global: {}, local: {}, box: {} },
-    },
-    bareActions: { create: ["NoOp"], call: [] },
-    methods,
-    byteCode: {
-      approval: algosdk.bytesToBase64(approval),
-      clear: algosdk.bytesToBase64(clear),
-    },
+    ...readonlyContract,
     ...(sourceInfo === "array"
       ? {
           sourceInfo: [{ pc: [assertPc], errorMessage: "n must be positive" }],
@@ -175,20 +38,27 @@ describe("readonly methods", () => {
         ? {
             sourceInfo: {
               approval: {
-                // pcs count from the first op after the version byte, the
-                // intcblock (5 bytes) and the bytecblock (7 bytes)
+                // A synthetic metadata variant exercises the cblocks format
+                // against real compiler output without hard-coded offsets.
                 pcOffsetMethod: "cblocks",
                 sourceInfo: [
-                  { pc: [assertPc - 13], errorMessage: "n must be positive" },
+                  {
+                    pc: [assertPc - constantBlockOffset],
+                    errorMessage: "n must be positive",
+                  },
                 ],
               },
               clear: { pcOffsetMethod: "none", sourceInfo: [] },
             },
           }
-        : {}),
+        : sourceInfo === "none"
+          ? { sourceInfo: undefined }
+          : {}),
   });
 
-  const create = async (sourceInfo: "array" | "cblocks" | "none" = "array") =>
+  const create = async (
+    sourceInfo: "compiler" | "array" | "cblocks" | "none" = "compiler",
+  ) =>
     (
       await ARC56AppClient.bareCreate({
         arc56: contract(sourceInfo),
@@ -203,7 +73,7 @@ describe("readonly methods", () => {
       "generated",
       "ReadonlyTestClient.ts",
     );
-    await new ARC56Generator(contract("array")).generateToFile(clientPath);
+    await new ARC56Generator(contract()).generateToFile(clientPath);
     return (await import(clientPath)) as {
       ReadonlyClient: new (p: {
         appId: bigint;
@@ -225,34 +95,19 @@ describe("readonly methods", () => {
 
   beforeAll(async () => {
     dispenser = await localnet.dispenser();
-    const approvalCompiled = await localnet.algod
-      .compile(APPROVAL)
-      .sourcemap(true)
-      .do();
-    approval = algosdk.base64ToBytes(approvalCompiled.result);
-    clear = algosdk.base64ToBytes(
-      (await localnet.algod.compile(CLEAR).do()).result,
-    );
-
-    const rawSourceMap = (
-      approvalCompiled.sourcemap as unknown as { data: Map<string, unknown> }
-    ).data;
-    const sourceMap = new algosdk.ProgramSourceMap({
-      version: Number(rawSourceMap.get("version")),
-      sources: rawSourceMap.get("sources") as string[],
-      names: rawSourceMap.get("names") as string[],
-      mappings: rawSourceMap.get("mappings") as string,
-    });
-    const assertLine = APPROVAL.split("\n").findIndex((l) =>
-      l.includes("MUST_BE_POSITIVE"),
-    );
-    const pc = sourceMap.getPcsOnSourceLine(0, assertLine)[0]?.pc;
+    const info = readonlyContract.sourceInfo;
+    if (!info || Array.isArray(info))
+      throw Error("missing compiler source info");
+    expect(info.approval.pcOffsetMethod).toBe("none");
+    const pc = info.approval.sourceInfo.find(
+      (entry) => entry.errorMessage === "n must be positive",
+    )?.pc[0];
     if (pc === undefined) throw Error("assert pc not found");
     assertPc = pc;
   });
 
   it("generates simulate-backed call entries only for readonly methods", async () => {
-    const code = await new ARC56Generator(contract("array")).generate();
+    const code = await new ARC56Generator(contract()).generate();
     const callBody = code.split("call = {")[1]?.split("\n  };")[0] ?? "";
     for (const name of [
       "getPoint",
@@ -347,7 +202,7 @@ async function usage() {
   });
 
   it("throws the ARC56 error message when a readonly method fails an assert", async () => {
-    for (const sourceInfo of ["array", "cblocks"] as const) {
+    for (const sourceInfo of ["compiler", "array", "cblocks"] as const) {
       const appClient = await create(sourceInfo);
 
       const { returnValue } = await appClient.simulateMethodCall({

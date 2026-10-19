@@ -8,7 +8,7 @@ import {
   type MethodResult,
 } from "../src/composer";
 import type { ARC56Contract } from "../src/types/arc56";
-import arc56Json from "../../../fixtures/ARC56Test.arc56.json";
+import arc56Json, { legacyStructs } from "../../../fixtures/arc56-test";
 
 function getResult(
   res: { methodResults: MethodResult[] },
@@ -30,7 +30,7 @@ function getTxn(
 
 describe("TransactionComposer ARC56", () => {
   const localnet = new Localnet();
-  const arc56 = arc56Json as unknown as ARC56Contract;
+  const arc56 = arc56Json;
   let sender: algosdk.AddressWithTransactionSigner;
   let appId: bigint;
 
@@ -41,7 +41,7 @@ describe("TransactionComposer ARC56", () => {
       algod: localnet.algod,
       method: "createApplication",
       sender,
-      templateVariables: { someNumber: 1337n },
+      templateVariables: { SOME_NUMBER: 1337n },
     });
     appId = created.appId;
     await localnet
@@ -535,11 +535,11 @@ describe("TransactionComposer ARC56", () => {
     );
   });
 
-  it("should support latest ARC56 StructField[] format in TransactionComposer", async () => {
+  const checkStructFormat = async (format: string) => {
     const arc56LatestStructs: ARC56Contract = {
       ...arc56,
       structs: {
-        "{ foo: uint16; bar: uint16 }": [
+        MapValue: [
           { name: "foo", type: "uint16" },
           { name: "bar", type: "uint16" },
         ],
@@ -566,6 +566,7 @@ describe("TransactionComposer ARC56", () => {
       },
     };
 
+    if (format === "legacy objects") arc56LatestStructs.structs = legacyStructs;
     const composer = localnet.composer();
     const inputs = { add: { a: 25n, b: 75n }, subtract: { a: 50n, b: 10n } };
 
@@ -584,7 +585,12 @@ describe("TransactionComposer ARC56", () => {
       sum: 100n,
       difference: 40n,
     });
-  });
+  };
+
+  it.each(["inline arrays", "legacy objects"])(
+    "should support %s structs in TransactionComposer",
+    checkStructFormat,
+  );
 
   it("should automatically decode return value when getParams from ARC56AppClient is passed to TransactionComposer", async () => {
     const appClient = new ARC56AppClient({
