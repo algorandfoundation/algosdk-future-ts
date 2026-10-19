@@ -6,6 +6,8 @@ out
 dist
 *.tgz
 **/__test__/generated
+fixtures/generated/*
+!fixtures/generated/*.arc56.json
 
 
 # code coverage

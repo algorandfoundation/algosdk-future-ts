@@ -8,6 +8,8 @@ export default defineConfig(
       "**/dist/**",
       "packages/*/example/**",
       "packages/*/__test__/generated/**",
+      // Contract sources use compiler-specific TypeScript dialects.
+      "fixtures/contracts/**",
     ],
   },
   {

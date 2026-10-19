@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeAll } from "vitest";
 import algosdk from "algosdk";
+import { readFileSync } from "node:fs";
 import { Localnet } from "@algosdk/localnet";
 import { ARC56AppClient, compileProgram } from "../src/arc56_client";
 import {
@@ -7,23 +8,20 @@ import {
   parseLogicError,
   type ARC56Contract,
 } from "@algosdk/transaction-composer";
-// Compiled by puya-ts 1.3.1 (puya 5.10.1) from:
-//
-// export class TemplateAssert extends Contract {
-//   check(value: uint64, other: uint64): bytes {
-//     assert(value === 42, 'value must be 42');
-//     assert(other !== 0, 'other must not be 0');
-//     return TemplateVar<bytes>('PAYLOAD');
-//   }
-// }
-import templateAssertJson from "../../../fixtures/TemplateAssert.arc56.json";
-// The Templates test contract of TEALScript 0.107.2. TEALScript counts
-// "cblocks" pcs from the last byte of the constant blocks and leaves byteCode
-// out when there are template variables.
-import tealscriptTemplatesJson from "../../../fixtures/TEALScriptTemplates.arc56.json";
 
-const templateAssert = templateAssertJson as unknown as ARC56Contract;
-const tealscriptTemplates = tealscriptTemplatesJson as unknown as ARC56Contract;
+// Generated from fixtures/contracts by the app-client project's global setup.
+const loadContract = (name: string) =>
+  JSON.parse(
+    readFileSync(
+      new URL(
+        `../../../fixtures/generated/${name}.arc56.json`,
+        import.meta.url,
+      ),
+      "utf8",
+    ),
+  ) as ARC56Contract;
+const templateAssert = loadContract("TemplateAssert");
+const tealscriptTemplates = loadContract("TEALScriptTemplates");
 
 describe("getConstantBlockOffset", () => {
   it("returns the pc of the first op after the constant blocks", () => {
@@ -69,63 +67,74 @@ describe("cblocks error mapping", () => {
   let sender: algosdk.AddressWithTransactionSigner;
 
   beforeAll(async () => {
+    for (const contract of [templateAssert, tealscriptTemplates]) {
+      const sourceInfo = contract.sourceInfo;
+      if (!sourceInfo || Array.isArray(sourceInfo)) {
+        throw new Error(`${contract.name} must have program source info`);
+      }
+      expect(sourceInfo.approval.pcOffsetMethod).toBe("cblocks");
+    }
     sender = await localnet.generateAccount({ fund: 10_000_000n });
   });
 
-  it("maps errors of a puya contract for every template value", async () => {
-    // The lengths change the size of the deployed bytecblock, including a
-    // length that takes a 2-byte uvarint
-    for (const length of [0, 10, 200]) {
-      const { appClient } = await ARC56AppClient.bareCreate({
-        arc56: templateAssert,
-        algod: localnet.algod,
-        sender,
-        templateVariables: { PAYLOAD: new Uint8Array(length).fill(0x61) },
-      });
-
-      await expect(
-        appClient.methodCall({ method: "check", methodArgs: [1n, 1n], sender }),
-      ).rejects.toThrow("value must be 42");
-      await expect(
-        appClient.simulateMethodCall({
-          method: "check",
-          methodArgs: [1n, 1n],
+  it.each([
+    ["puya", templateAssert],
+    ["TEALScript", tealscriptTemplates],
+  ] as const)(
+    "maps errors of a %s contract for every template value",
+    async (compiler, arc56) => {
+      // The lengths change the size of the deployed bytecblock, including a
+      // length that takes a 2-byte uvarint
+      for (const length of [0, 10, 200]) {
+        const payload = new Uint8Array(length).fill(0x61);
+        const createParams = {
+          arc56,
+          algod: localnet.algod,
           sender,
-        }),
-      ).rejects.toThrow("value must be 42");
+          templateVariables: { PAYLOAD: payload },
+        };
+        const { appClient } =
+          compiler === "puya"
+            ? await ARC56AppClient.bareCreate(createParams)
+            : await ARC56AppClient.createMethodCall({
+                ...createParams,
+                method: "createApplication",
+              });
 
-      // A client constructed by app id reads the deployed program from algod
-      const byId = new ARC56AppClient({
-        arc56: templateAssert,
-        algod: localnet.algod,
-        appId: appClient.appId,
-      });
-      await expect(
-        byId.methodCall({ method: "check", methodArgs: [42n, 0n], sender }),
-      ).rejects.toThrow("other must not be 0");
-    }
-  });
+        const { returnValue } = await appClient.methodCall({
+          method: "check",
+          methodArgs: [42n, 1n],
+          sender,
+        });
+        expect(returnValue).toEqual(payload);
 
-  it("maps errors of a TEALScript contract for every template value", async () => {
-    for (const length of [0, 10, 200]) {
-      const { appClient } = await ARC56AppClient.createMethodCall({
-        arc56: tealscriptTemplates,
-        algod: localnet.algod,
-        sender,
-        method: "createApplication",
-        templateVariables: {
-          bytesTmplVar: new Uint8Array(length).fill(0x61),
-          uint64TmplVar: 123n,
-          bytes32TmplVar: new Uint8Array(32),
-          bytes64TmplVar: new Uint8Array(64),
-        },
-      });
+        await expect(
+          appClient.methodCall({
+            method: "check",
+            methodArgs: [1n, 1n],
+            sender,
+          }),
+        ).rejects.toThrow("value must be 42");
+        await expect(
+          appClient.simulateMethodCall({
+            method: "check",
+            methodArgs: [1n, 1n],
+            sender,
+          }),
+        ).rejects.toThrow("value must be 42");
 
-      await expect(
-        appClient.methodCall({ method: "throwError", sender }),
-      ).rejects.toThrow("this is an error");
-    }
-  });
+        // A client constructed by app id reads the deployed program from algod
+        const byId = new ARC56AppClient({
+          arc56,
+          algod: localnet.algod,
+          appId: appClient.appId,
+        });
+        await expect(
+          byId.methodCall({ method: "check", methodArgs: [42n, 0n], sender }),
+        ).rejects.toThrow("other must not be 0");
+      }
+    },
+  );
 
   it("needs the deployed program to map errors of a template-variable contract", async () => {
     const deployed = await compileProgram(

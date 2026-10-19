@@ -12,7 +12,13 @@ export default defineConfig({
     fileParallelism: false,
     projects: packages.map((name) => ({
       extends: true,
-      test: { name, root: `packages/${name}` },
+      test: {
+        name,
+        root: `packages/${name}`,
+        ...(name === "app-client"
+          ? { globalSetup: ["../../scripts/generate-fixtures.ts"] }
+          : {}),
+      },
     })),
   },
 });
