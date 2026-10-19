@@ -9,7 +9,7 @@ import {
   type ARC56Contract,
 } from "@algosdk/transaction-composer";
 
-// Generated from fixtures/contracts by the app-client project's global setup.
+// Generated from fixtures/contracts by Vitest's global setup.
 const loadContract = (name: string) =>
   JSON.parse(
     readFileSync(

@@ -7,17 +7,17 @@ import { ARC56Generator } from "../src/generator";
 import type { ARC56Contract } from "@algosdk/transaction-composer";
 import type { ARC56TestReturnTypes } from "../example/ARC56TestClient";
 import { ARC56TestClient } from "../example/ARC56TestClient";
-import arc56Json from "../../../fixtures/ARC56Test.arc56.json";
+import arc56Json from "../../../fixtures/arc56-test";
 
 describe("ARC56Generator local state", () => {
   it("should generate local getters accepting addresses without a signer", async () => {
-    const generator = new ARC56Generator(arc56Json as unknown as ARC56Contract);
+    const generator = new ARC56Generator(arc56Json);
     const lines = generator.getStateLines();
     expect(lines).toContain(
-      'localKey: async (address: string | algosdk.Address | algosdk.AddressWithTransactionSigner): Promise<uint64> => { return this.getState.key("localKey", address); },',
+      'localKey: async (address: string | algosdk.Address | algosdk.AddressWithTransactionSigner): Promise<AVMUint64> => { return this.getState.key("localKey", address); },',
     );
     expect(lines).toContain(
-      'value: async (address: string | algosdk.Address | algosdk.AddressWithTransactionSigner, key: bytes): Promise<string> => { return this.getState.map.value("localMap", key, address); },',
+      'value: async (address: string | algosdk.Address | algosdk.AddressWithTransactionSigner, key: AVMBytes): Promise<string> => { return this.getState.map.value("localMap", key, address); },',
     );
     const exampleCode = await fs.promises.readFile(
       path.join(__dirname, "../example/ARC56TestClient.ts"),
@@ -77,7 +77,7 @@ describe("ARC56Generator local state", () => {
 
 describe("ARC56Generator", () => {
   const localnet = new Localnet();
-  const arc56 = arc56Json as unknown as ARC56Contract;
+  const arc56 = arc56Json;
   let dispenser: algosdk.AddressWithTransactionSigner;
 
   beforeAll(async () => {
@@ -106,8 +106,8 @@ describe("ARC56Generator", () => {
     expect(code).toContain("sum: uint64;");
     expect(code).toContain("difference: uint64;");
     expect(code).toContain("export type Inputs = {");
-    expect(code).toContain("add: {");
-    expect(code).toContain("subtract: {");
+    expect(code).toContain("add: Pair;");
+    expect(code).toContain("subtract: Pair;");
 
     // Check method return types
     expect(code).toContain("export type ARC56TestReturnTypes = {");
@@ -116,7 +116,7 @@ describe("ARC56Generator", () => {
 
     // Check template variables type
     expect(code).toContain("export type TemplateVariables = {");
-    expect(code).toContain("someNumber: uint64;");
+    expect(code).toContain("SOME_NUMBER: AVMUint64;");
 
     // Check Client class definition
     expect(code).toContain(
@@ -148,12 +148,12 @@ describe("ARC56Generator", () => {
 
     // Check state accessors
     expect(code).toContain("state = {");
-    expect(code).toContain("globalKey: async (): Promise<uint64> => {");
+    expect(code).toContain("globalKey: async (): Promise<AVMUint64> => {");
     expect(code).toContain('return this.getState.key("localKey", address);');
     expect(code).toContain("boxKey: async (): Promise<string> => {");
     expect(code).toContain("globalMap: {");
     expect(code).toContain(
-      "value: async (key: string): Promise<{ foo: uint16; bar: uint16 }> => {",
+      "value: async (key: string): Promise<MapValue> => {",
     );
 
     // Check decodeReturnValue
@@ -256,7 +256,7 @@ describe("ARC56Generator", () => {
       await ARC56TestClient.create.createApplication({
         algod: localnet.algod,
         sender: dispenser,
-        templateVariables: { someNumber: 1337n },
+        templateVariables: { SOME_NUMBER: 1337n },
       });
 
     expect(appId).toBeGreaterThan(0n);
@@ -341,7 +341,9 @@ describe("ARC56Generator", () => {
 
     expect(await appClient.state.local(dispenser)).toEqual({
       keys: { localKey: 1337n },
-      maps: { localMap: [{ key: "foo", value: "bar" }] },
+      maps: {
+        localMap: [{ key: new TextEncoder().encode("foo"), value: "bar" }],
+      },
     });
 
     const boxKeyVal = await appClient.state.keys.boxKey();

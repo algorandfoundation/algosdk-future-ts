@@ -1,9 +1,15 @@
 import { describe, it, expect, beforeAll } from "vitest";
 import algosdk from "algosdk";
 import { Localnet } from "@algosdk/localnet";
-import { ARC56AppClient } from "../src/arc56_client";
-import type { ARC56Contract } from "@algosdk/transaction-composer";
-import arc56Json from "../../../fixtures/ARC56Test.arc56.json";
+import { ARC56AppClient, compileProgram } from "../src/arc56_client";
+import {
+  getConstantBlockOffset,
+  type ARC56Contract,
+} from "@algosdk/transaction-composer";
+import arc56Json, {
+  loadContract,
+  legacyStructs,
+} from "../../../fixtures/arc56-test";
 
 describe.each(["global", "local"] as const)(
   "ARC56AppClient bulk %s state",
@@ -13,7 +19,7 @@ describe.each(["global", "local"] as const)(
       entries: algosdk.modelsv2.TealKeyValue[],
     ) {
       const client = new ARC56AppClient({
-        arc56: { ...(arc56Json as unknown as ARC56Contract), state },
+        arc56: { ...arc56Json, state },
         appId: 1n,
         algod: {
           getApplicationByID: () => ({
@@ -153,7 +159,7 @@ describe("ARC56AppClient bulk box state", () => {
 
     const client = new ARC56AppClient({
       arc56: {
-        ...(arc56Json as unknown as ARC56Contract),
+        ...arc56Json,
         state: {
           keys: {
             box: {
@@ -253,7 +259,7 @@ describe("ARC56AppClient bulk box state", () => {
 
 describe("ARC56AppClient", () => {
   const localnet = new Localnet();
-  const arc56 = arc56Json as unknown as ARC56Contract;
+  const arc56 = arc56Json;
   let sender: algosdk.AddressWithTransactionSigner;
 
   beforeAll(async () => {
@@ -267,7 +273,7 @@ describe("ARC56AppClient", () => {
         algod: localnet.algod,
         method: "createApplication",
         sender,
-        templateVariables: { someNumber: 1337n },
+        templateVariables: { SOME_NUMBER: 1337n },
       });
 
     expect(appId).toBeGreaterThan(0n);
@@ -284,7 +290,7 @@ describe("ARC56AppClient", () => {
       algod: localnet.algod,
       method: "createApplication",
       sender,
-      templateVariables: { someNumber: 1337n },
+      templateVariables: { SOME_NUMBER: 1337n },
     });
 
     const inputs = { add: { a: 1n, b: 2n }, subtract: { a: 10n, b: 5n } };
@@ -304,7 +310,7 @@ describe("ARC56AppClient", () => {
       algod: localnet.algod,
       method: "createApplication",
       sender,
-      templateVariables: { someNumber: 1337n },
+      templateVariables: { SOME_NUMBER: 1337n },
     });
 
     const bob = await localnet.generateAccount({ fund: 10_000_000n });
@@ -330,7 +336,7 @@ describe("ARC56AppClient", () => {
       algod: localnet.algod,
       method: "createApplication",
       sender,
-      templateVariables: { someNumber: 1337n },
+      templateVariables: { SOME_NUMBER: 1337n },
     });
 
     const { appClient: appClient2 } = await ARC56AppClient.createMethodCall({
@@ -338,7 +344,7 @@ describe("ARC56AppClient", () => {
       algod: localnet.algod,
       method: "createApplication",
       sender,
-      templateVariables: { someNumber: 1337n },
+      templateVariables: { SOME_NUMBER: 1337n },
     });
 
     const inputs = { add: { a: 1n, b: 2n }, subtract: { a: 10n, b: 5n } };
@@ -389,7 +395,7 @@ describe("ARC56AppClient", () => {
       algod: localnet.algod,
       method: "createApplication",
       sender,
-      templateVariables: { someNumber: 1337n },
+      templateVariables: { SOME_NUMBER: 1337n },
     });
 
     // subtract.a < subtract.b should trigger contract assertion
@@ -403,54 +409,7 @@ describe("ARC56AppClient", () => {
   });
 
   it("should map logic errors during create calls using sourceInfo", async () => {
-    const approvalTeal = `#pragma version 10
-txna ApplicationArgs 1
-btoi
-pushint 42
-==
-assert
-pushint 1
-return`;
-    const bareApprovalTeal = `#pragma version 10
-err`;
-    const clearTeal = `#pragma version 10
-pushint 1
-return`;
-
-    const compile = async (teal: string) =>
-      algosdk.base64ToBytes((await localnet.algod.compile(teal).do()).result);
-
-    const createArc56 = {
-      arcs: [],
-      name: "Assert42",
-      structs: {},
-      networks: {},
-      state: {
-        schema: { global: { ints: 0, bytes: 0 }, local: { ints: 0, bytes: 0 } },
-        keys: { global: {}, local: {}, box: {} },
-        maps: { global: {}, local: {}, box: {} },
-      },
-      bareActions: { create: ["NoOp"], call: [] },
-      methods: [
-        {
-          name: "create",
-          args: [{ type: "uint64", name: "x" }],
-          returns: { type: "void" },
-          actions: { create: ["NoOp"], call: [] },
-        },
-      ],
-      sourceInfo: {
-        approval: {
-          sourceInfo: [{ pc: [8], errorMessage: "x must be 42" }],
-          pcOffsetMethod: "none",
-        },
-        clear: { sourceInfo: [], pcOffsetMethod: "none" },
-      },
-      byteCode: {
-        approval: algosdk.bytesToBase64(await compile(approvalTeal)),
-        clear: algosdk.bytesToBase64(await compile(clearTeal)),
-      },
-    } as unknown as ARC56Contract;
+    const createArc56 = loadContract("Assert42");
 
     let createError = "";
     try {
@@ -466,20 +425,7 @@ return`;
     }
     expect(createError).toContain("x must be 42");
 
-    const bareCreateArc56 = {
-      ...createArc56,
-      sourceInfo: {
-        approval: {
-          sourceInfo: [{ pc: [1], errorMessage: "bare create failed" }],
-          pcOffsetMethod: "none",
-        },
-        clear: { sourceInfo: [], pcOffsetMethod: "none" },
-      },
-      byteCode: {
-        approval: algosdk.bytesToBase64(await compile(bareApprovalTeal)),
-        clear: algosdk.bytesToBase64(await compile(clearTeal)),
-      },
-    } as unknown as ARC56Contract;
+    const bareCreateArc56 = loadContract("BareCreateError");
 
     let bareCreateError = "";
     try {
@@ -500,7 +446,7 @@ return`;
       algod: localnet.algod,
       method: "createApplication",
       sender,
-      templateVariables: { someNumber: 1337n },
+      templateVariables: { SOME_NUMBER: 1337n },
     });
 
     // Calling foo sets globalKey and globalMap("foo")
@@ -529,7 +475,7 @@ return`;
       algod: localnet.algod,
       method: "createApplication",
       sender,
-      templateVariables: { someNumber: 1337n },
+      templateVariables: { SOME_NUMBER: 1337n },
     });
 
     // Fund app account for box MBR
@@ -574,7 +520,9 @@ return`;
     const localState = await appClient.getState.local(sender);
     expect(localState).toEqual({
       keys: { localKey: 1337n },
-      maps: { localMap: [{ key: "foo", value: "bar" }] },
+      maps: {
+        localMap: [{ key: new TextEncoder().encode("foo"), value: "bar" }],
+      },
     });
 
     // Verify box state
@@ -639,12 +587,12 @@ return`;
     ).rejects.toThrow("OptIn is not supported for foo");
   });
 
-  it("should support latest ARC-56 StructField[] format", async () => {
-    // Convert struct definitions from object format to latest ARC-56 StructField[] format
+  const checkStructFormat = async (format: string) => {
+    // Metadata variants retain coverage for inline arrays and legacy objects.
     const arc56LatestStructs: ARC56Contract = {
       ...arc56,
       structs: {
-        "{ foo: uint16; bar: uint16 }": [
+        MapValue: [
           { name: "foo", type: "uint16" },
           { name: "bar", type: "uint16" },
         ],
@@ -671,12 +619,13 @@ return`;
       },
     };
 
+    if (format === "legacy objects") arc56LatestStructs.structs = legacyStructs;
     const { appClient } = await ARC56AppClient.createMethodCall({
       arc56: arc56LatestStructs,
       algod: localnet.algod,
       method: "createApplication",
       sender,
-      templateVariables: { someNumber: 1337n },
+      templateVariables: { SOME_NUMBER: 1337n },
     });
 
     const inputs = { add: { a: 15n, b: 25n }, subtract: { a: 100n, b: 40n } };
@@ -687,24 +636,28 @@ return`;
     });
 
     expect(returnValue).toEqual({ sum: 40n, difference: 60n });
-  });
+  };
 
-  it("should support latest ARC-56 approval.sourceInfo format with pcOffsetMethod", async () => {
-    const rawSourceInfo = Array.isArray(arc56.sourceInfo)
-      ? arc56.sourceInfo
-      : [];
+  it.each(["inline arrays", "legacy objects"])(
+    "should support %s structs",
+    checkStructFormat,
+  );
+
+  it("should support legacy sourceInfo arrays with absolute pcs", async () => {
+    const info = arc56.sourceInfo;
+    if (!info || Array.isArray(info))
+      throw new Error("missing compiler source info");
+    expect(info.approval.pcOffsetMethod).toBe("cblocks");
+    const deployed = await compileProgram(arc56, localnet.algod, "approval", {
+      SOME_NUMBER: 1337n,
+    });
+    const offset = getConstantBlockOffset(deployed);
     const arc56LatestSourceInfo: ARC56Contract = {
       ...arc56,
-      sourceInfo: {
-        approval: {
-          pcOffsetMethod: "none",
-          sourceInfo: rawSourceInfo,
-        },
-        clear: {
-          pcOffsetMethod: "none",
-          sourceInfo: [],
-        },
-      },
+      sourceInfo: info.approval.sourceInfo.map((entry) => ({
+        ...entry,
+        pc: entry.pc.map((pc) => pc + offset),
+      })),
     };
 
     const { appClient } = await ARC56AppClient.createMethodCall({
@@ -712,7 +665,7 @@ return`;
       algod: localnet.algod,
       method: "createApplication",
       sender,
-      templateVariables: { someNumber: 1337n },
+      templateVariables: { SOME_NUMBER: 1337n },
     });
 
     await expect(

@@ -8,14 +8,22 @@ const output = resolve(root, "fixtures/generated");
 
 export default function generateFixtures() {
   mkdirSync(output, { recursive: true });
-  const contracts = ["TemplateAssert", "TEALScriptTemplates"];
+  const contracts = [
+    "TemplateAssert",
+    "TEALScriptTemplates",
+    "ARC56Test",
+    "Readonly",
+    "Assert42",
+    "BareCreateError",
+    "ResourcePopulation",
+  ];
   for (const name of contracts) {
     rmSync(resolve(output, `${name}.arc56.json`), { force: true });
   }
   for (const args of [
     [
       "puya-ts",
-      "fixtures/contracts/puya/template-assert.algo.ts",
+      "fixtures/contracts/puya",
       "--out-dir",
       output,
       "--target-avm-version",

@@ -8,6 +8,7 @@ export default defineConfig({
     tsconfigPaths: true,
   },
   test: {
+    globalSetup: ["./scripts/generate-fixtures.ts"],
     // Test files share LocalNet accounts, so run them one at a time
     fileParallelism: false,
     projects: packages.map((name) => ({
@@ -15,9 +16,7 @@ export default defineConfig({
       test: {
         name,
         root: `packages/${name}`,
-        ...(name === "app-client"
-          ? { globalSetup: ["../../scripts/generate-fixtures.ts"] }
-          : {}),
+        globalSetup: [],
       },
     })),
   },

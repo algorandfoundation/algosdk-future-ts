@@ -1,11 +1,10 @@
 import { describe, it, expect } from "vitest";
 import algosdk from "algosdk";
 import { getTypeScriptValue } from "../src/arc56_utils";
-import type { ARC56Contract } from "../src/types/arc56";
-import arc56Json from "../../../fixtures/ARC56Test.arc56.json";
+import arc56Json from "../../../fixtures/arc56-test";
 
 describe("getTypeScriptValue", () => {
-  const arc56 = arc56Json as unknown as ARC56Contract;
+  const arc56 = arc56Json;
   const values = [0n, 5n, 2n ** 53n - 1n, 2n ** 53n, 2n ** 60n, 2n ** 64n - 1n];
 
   for (const type of ["AVMUint64", "uint64"]) {
