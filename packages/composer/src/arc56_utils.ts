@@ -23,10 +23,10 @@ export function getABITypeFromStructFields(
   const pushType = (val: StructDef) => {
     if (typeof val !== "string") {
       typesArray.push(getABITypeFromStructFields(arc56, val));
-    } else if (arc56.structs && arc56.structs[val]) {
-      typesArray.push(getABIType(arc56, val));
     } else {
-      typesArray.push(val);
+      // Expand struct references, including arrays of them, so the resulting
+      // type string is a valid ABI type
+      typesArray.push(getABIType(arc56, val));
     }
   };
 
@@ -48,7 +48,61 @@ export function getABIType(arc56: ARC56Contract, type: string): string {
     return getABITypeFromStructFields(arc56, arc56.structs[type]);
   }
 
+  // Expand struct references inside arrays, e.g. `Point[]` -> `(uint64,uint64)[]`
+  const array = type.match(/^(.*)\[(\d*)\]$/);
+  if (array) {
+    const base = array[1] ?? "";
+    const expanded = getABIType(arc56, base);
+    if (expanded !== base) {
+      return `${expanded}[${array[2]}]`;
+    }
+  }
+
   return type;
+}
+
+export interface StructTypeMatch {
+  /** The full name of the matching ARC56 struct */
+  name: string;
+  /** How many arrays wrap the struct, e.g. 2 for `Point[][]` */
+  arrayDepth: number;
+}
+
+/**
+ * Find an ARC56 struct by name, including arrays of that struct.
+ */
+export function getStructForType(
+  arc56: ARC56Contract,
+  type: string,
+): StructTypeMatch | undefined {
+  const structs = arc56.structs;
+  if (!structs) return undefined;
+
+  if (structs[type]) return { name: type, arrayDepth: 0 };
+
+  let base = type;
+  let arrayDepth = 0;
+  while (/\[\d*\]$/.test(base)) {
+    base = base.replace(/\[\d*\]$/, "");
+    arrayDepth += 1;
+  }
+
+  if (structs[base]) return { name: base, arrayDepth };
+
+  return undefined;
+}
+
+/** Apply `convert` to every leaf of a value nested `arrayDepth` arrays deep */
+function convertArrayDepth(
+  value: unknown,
+  arrayDepth: number,
+  convert: (value: unknown) => unknown,
+): unknown {
+  if (arrayDepth === 0) return convert(value);
+  if (!Array.isArray(value)) return value;
+  return value.map((child) =>
+    convertArrayDepth(child, arrayDepth - 1, convert),
+  );
 }
 
 export function getABIValuesFromStructFieldsAndObject(
@@ -58,61 +112,43 @@ export function getABIValuesFromStructFieldsAndObject(
 ): algosdk.ABIValue[] {
   const valuesArray: algosdk.ABIValue[] = [];
 
+  const pushValue = (val: StructDef, prop: unknown) => {
+    if (typeof val !== "string") {
+      valuesArray.push(
+        isRecord(prop)
+          ? getABIValuesFromStructFieldsAndObject(arc56, val, prop)
+          : (prop as algosdk.ABIValue),
+      );
+      return;
+    }
+
+    if (val === "bytes" || val === "AVMBytes" || val === "AVMString") {
+      valuesArray.push(valueToBytes(prop));
+      return;
+    }
+    if (val === "AVMUint64") {
+      valuesArray.push(
+        algosdk.encodeUint64(
+          typeof prop === "bigint"
+            ? prop
+            : typeof prop === "number" || typeof prop === "string"
+              ? BigInt(prop)
+              : 0n,
+        ),
+      );
+      return;
+    }
+
+    valuesArray.push(getABIValue(arc56, val, prop));
+  };
+
   if (Array.isArray(structFields)) {
     for (const field of structFields) {
-      const key = field.name;
-      const val = field.type;
-      const prop = isRecord(obj) ? obj[key] : undefined;
-      if (Array.isArray(val)) {
-        valuesArray.push(
-          isRecord(prop)
-            ? getABIValuesFromStructFieldsAndObject(arc56, val, prop)
-            : (prop as algosdk.ABIValue),
-        );
-      } else if (
-        typeof val === "string" &&
-        arc56.structs &&
-        arc56.structs[val]
-      ) {
-        valuesArray.push(
-          isRecord(prop)
-            ? getABIValuesFromStructFieldsAndObject(
-                arc56,
-                arc56.structs[val],
-                prop,
-              )
-            : (prop as algosdk.ABIValue),
-        );
-      } else {
-        valuesArray.push(prop as algosdk.ABIValue);
-      }
+      pushValue(field.type, isRecord(obj) ? obj[field.name] : undefined);
     }
   } else if (typeof structFields === "object") {
     for (const [key, val] of Object.entries(structFields)) {
-      const prop = isRecord(obj) ? obj[key] : undefined;
-      if (typeof val === "object") {
-        valuesArray.push(
-          isRecord(prop)
-            ? getABIValuesFromStructFieldsAndObject(arc56, val, prop)
-            : (prop as algosdk.ABIValue),
-        );
-      } else if (
-        typeof val === "string" &&
-        arc56.structs &&
-        arc56.structs[val]
-      ) {
-        valuesArray.push(
-          isRecord(prop)
-            ? getABIValuesFromStructFieldsAndObject(
-                arc56,
-                arc56.structs[val],
-                prop,
-              )
-            : (prop as algosdk.ABIValue),
-        );
-      } else {
-        valuesArray.push(prop as algosdk.ABIValue);
-      }
+      pushValue(val, isRecord(obj) ? obj[key] : undefined);
     }
   }
 
@@ -132,15 +168,15 @@ export function getABIValue(
   ) {
     return value as algosdk.ABIValue;
   }
-  if (arc56.structs && arc56.structs[type]) {
-    if (isRecord(value)) {
-      return getABIValuesFromStructFieldsAndObject(
-        arc56,
-        arc56.structs[type],
-        value,
-      );
-    }
-    return value as algosdk.ABIValue;
+
+  const match = getStructForType(arc56, type);
+  const def = match ? arc56.structs?.[match.name] : undefined;
+  if (match && def) {
+    return convertArrayDepth(value, match.arrayDepth, (val) =>
+      isRecord(val)
+        ? getABIValuesFromStructFieldsAndObject(arc56, def, val)
+        : val,
+    ) as algosdk.ABIValue;
   }
 
   return value as algosdk.ABIValue;
@@ -154,53 +190,38 @@ export function getObjectFromStructFieldsAndArray(
   const obj: Record<string, unknown> = {};
   const arr = [...valuesArray];
 
+  const setValue = (key: string, val: StructDef, nextVal: unknown) => {
+    if (typeof val !== "string") {
+      obj[key] = getObjectFromStructFieldsAndArray(
+        arc56,
+        val,
+        Array.isArray(nextVal) ? nextVal : [],
+      );
+      return;
+    }
+
+    if (val === "bytes" || val === "AVMString") {
+      obj[key] =
+        nextVal instanceof Uint8Array
+          ? new TextDecoder().decode(nextVal)
+          : nextVal;
+      return;
+    }
+    if (val === "AVMBytes") {
+      obj[key] = nextVal;
+      return;
+    }
+
+    obj[key] = getDecodedValue(arc56, val, nextVal);
+  };
+
   if (Array.isArray(structFields)) {
     for (const field of structFields) {
-      const key = field.name;
-      const val = field.type;
-      const nextVal = arr.shift();
-      if (Array.isArray(val)) {
-        obj[key] = getObjectFromStructFieldsAndArray(
-          arc56,
-          val,
-          Array.isArray(nextVal) ? nextVal : [],
-        );
-      } else if (
-        typeof val === "string" &&
-        arc56.structs &&
-        arc56.structs[val]
-      ) {
-        obj[key] = getObjectFromStructFieldsAndArray(
-          arc56,
-          arc56.structs[val],
-          Array.isArray(nextVal) ? nextVal : [],
-        );
-      } else {
-        obj[key] = nextVal;
-      }
+      setValue(field.name, field.type, arr.shift());
     }
   } else if (typeof structFields === "object") {
     for (const [key, val] of Object.entries(structFields)) {
-      const nextVal = arr.shift();
-      if (typeof val === "object") {
-        obj[key] = getObjectFromStructFieldsAndArray(
-          arc56,
-          val,
-          Array.isArray(nextVal) ? nextVal : [],
-        );
-      } else if (
-        typeof val === "string" &&
-        arc56.structs &&
-        arc56.structs[val]
-      ) {
-        obj[key] = getObjectFromStructFieldsAndArray(
-          arc56,
-          arc56.structs[val],
-          Array.isArray(nextVal) ? nextVal : [],
-        );
-      } else {
-        obj[key] = nextVal;
-      }
+      setValue(key, val, arr.shift());
     }
   }
 
@@ -234,7 +255,11 @@ function normalizeDecodedABIValue(
   return value;
 }
 
-export function getTypeScriptValue(
+/**
+ * Decode the raw bytes of a value of the given ARC56 type into its TypeScript
+ * value. Named struct types are returned as objects.
+ */
+export function decodeValue(
   arc56: ARC56Contract,
   type: string,
   value: Uint8Array,
@@ -252,15 +277,70 @@ export function getTypeScriptValue(
   const abiType = algosdk.ABIType.from(getABIType(arc56, type));
   const abiValue = normalizeDecodedABIValue(abiType, abiType.decode(value));
 
-  if (arc56.structs && arc56.structs[type]) {
-    return getObjectFromStructFieldsAndArray(
-      arc56,
-      arc56.structs[type],
-      Array.isArray(abiValue) ? abiValue : [abiValue],
+  return getDecodedValue(arc56, type, abiValue);
+}
+
+/** Convert an already decoded ABI value to its TypeScript representation. */
+function getDecodedValue(
+  arc56: ARC56Contract,
+  type: string,
+  value: unknown,
+): unknown {
+  const match = getStructForType(arc56, type);
+  const def = match ? arc56.structs?.[match.name] : undefined;
+  if (match && def) {
+    return convertArrayDepth(value, match.arrayDepth, (val) =>
+      getObjectFromStructFieldsAndArray(
+        arc56,
+        def,
+        Array.isArray(val) ? val : [val],
+      ),
     );
   }
 
-  return abiValue;
+  return value;
+}
+
+function valueToBytes(value: unknown): Uint8Array {
+  if (typeof value === "string") {
+    return new TextEncoder().encode(value);
+  }
+  if (value instanceof Uint8Array) {
+    return value;
+  }
+  if (ArrayBuffer.isView(value)) {
+    return new Uint8Array(value.buffer, value.byteOffset, value.byteLength);
+  }
+  if (Array.isArray(value)) {
+    return new Uint8Array(value as number[]);
+  }
+  return new Uint8Array();
+}
+
+/**
+ * Encode a TypeScript value of the given ARC56 type into its ABI bytes. Struct
+ * types accept objects; ABI tuple types accept tuples.
+ */
+export function encodeValue(
+  arc56: ARC56Contract,
+  type: string,
+  value: unknown,
+): Uint8Array {
+  if (type === "bytes" || type === "AVMBytes" || type === "AVMString") {
+    return valueToBytes(value);
+  }
+  if (type === "AVMUint64") {
+    const uintValue =
+      typeof value === "bigint"
+        ? value
+        : typeof value === "number" || typeof value === "string"
+          ? BigInt(value)
+          : 0n;
+    return algosdk.encodeUint64(uintValue);
+  }
+
+  const abiType = algosdk.ABIType.from(getABIType(arc56, type));
+  return abiType.encode(getABIValue(arc56, type, value));
 }
 
 export function decodeMethodReturnValue(
@@ -272,7 +352,7 @@ export function decodeMethodReturnValue(
   if (method.returns.type === "void" || rawValue.length === 0) {
     return undefined;
   }
-  return getTypeScriptValue(
+  return decodeValue(
     arc56,
     method.returns.struct ?? method.returns.type,
     rawValue,

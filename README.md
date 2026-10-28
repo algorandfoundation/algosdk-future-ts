@@ -298,3 +298,24 @@ const result = composer.execute(algod);
 const resultOfMethodOne = result.methodResults[0].returnValue as HelloWorldReturnTypes['methodOne']
 const resultOfMethodTwo = result.methodResults[1].returnValue as HelloWorldReturnTypes['methodTwo']
 ```
+
+### Struct and Value Helpers
+
+The generated client exports `StructNameFromTuple` and `StructNameToTuple` helpers for every ARC56 struct. These are useful when a box or another API surfaces a tuple instead of the struct object.
+
+```ts
+import { StakedInfoFromTuple } from "../contracts/clients/RetiClient";
+
+const stakers = rawStakers.map(StakedInfoFromTuple);
+```
+
+`@algosdk/transaction-composer` also exports `encodeValue` and `decodeValue`, which work with any ARC56 type by name:
+
+```ts
+import { decodeValue, encodeValue } from "@algosdk/transaction-composer";
+
+const encoded = encodeValue(APP_SPEC, "StakedInfo", stakedInfo);
+const decoded = decodeValue(APP_SPEC, "StakedInfo", encoded);
+```
+
+Struct objects are used for named struct types and ARC56 struct annotations. Use the generated `StructNameFromTuple` and `StructNameToTuple` helpers to convert between tuples and struct objects.

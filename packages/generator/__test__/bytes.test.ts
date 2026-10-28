@@ -1,9 +1,10 @@
 import { describe, it, expect, vi } from "vitest";
+import { runInNewContext } from "node:vm";
 import algosdk from "algosdk";
 import ts from "typescript";
 import { ARC56AppClient } from "@algosdk/app-client";
 import {
-  getTypeScriptValue,
+  decodeValue,
   TransactionComposer,
   type ARC56Contract,
 } from "@algosdk/transaction-composer";
@@ -84,7 +85,7 @@ describe("ABI bytes", () => {
         appId: 1n,
         algod: new algosdk.Algodv2("", "http://localhost", 1),
       });
-      expect(getTypeScriptValue(arc56, type, raw)).toEqual(expected);
+      expect(decodeValue(arc56, type, raw)).toEqual(expected);
       expect(client.decodeMethodReturnValue("method0", raw)).toEqual(expected);
     },
   );
@@ -129,7 +130,7 @@ describe("ABI bytes", () => {
           tuple: [new Uint8Array([6]), 9n],
         },
       };
-      expect(getTypeScriptValue(arc56, "Output", raw)).toEqual(expected);
+      expect(decodeValue(arc56, "Output", raw)).toEqual(expected);
       const client = new ARC56AppClient({
         arc56,
         appId: 1n,
@@ -264,18 +265,69 @@ describe("ABI bytes", () => {
   it("supports byte-array consumers and preserves legacy bytes and AVM values", () => {
     const arc56 = contract();
     const text = new Uint8Array([104, 105]);
-    const decoded = getTypeScriptValue(
+    const decoded = decodeValue(
       arc56,
       "byte[]",
       algosdk.ABIType.from("byte[]").encode(text),
     ) as Uint8Array;
     expect(new TextDecoder().decode(decoded)).toBe("hi");
     const key = new Uint8Array(32).fill(1);
-    const decodedKey = getTypeScriptValue(arc56, "byte[32]", key) as Uint8Array;
+    const decodedKey = decodeValue(arc56, "byte[32]", key) as Uint8Array;
     expect(new algosdk.Address(decodedKey).publicKey).toEqual(key);
-    expect(getTypeScriptValue(arc56, "bytes", text)).toBe("hi");
-    expect(getTypeScriptValue(arc56, "AVMString", text)).toBe("hi");
-    expect(getTypeScriptValue(arc56, "AVMBytes", text)).toBe(text);
+    expect(decodeValue(arc56, "bytes", text)).toBe("hi");
+    expect(decodeValue(arc56, "AVMString", text)).toBe("hi");
+    expect(decodeValue(arc56, "AVMBytes", text)).toBe(text);
+  });
+
+  it("generates helpers to convert structs to and from tuples", async () => {
+    const code = await new ARC56Generator(
+      arc56Json as unknown as ARC56Contract,
+    ).generate();
+
+    expect(code).toContain(
+      "export function OutputsFromTuple(value: [uint64, uint64]): Outputs {",
+    );
+    expect(code).toContain(
+      "export function OutputsToTuple(value: Outputs): [uint64, uint64] {",
+    );
+    expect(code).toContain(
+      "export function InputsFromTuple(\n  value: [[uint64, uint64], [uint64, uint64]],\n): Inputs {",
+    );
+  });
+
+  it("preserves tuple fields and converts only explicit struct references in helpers", () => {
+    const arc56 = contract("((uint64,uint64),string,byte[])[]");
+    arc56.structs = {
+      Outputs: [
+        { name: "sum", type: "uint64" },
+        { name: "difference", type: "uint64" },
+      ],
+      Wrapper: [
+        { name: "entries", type: "((uint64,uint64),string,byte[])[]" },
+        { name: "outputs", type: "Outputs[1][]" },
+      ],
+    };
+    const generator = new ARC56Generator(arc56);
+    expect(
+      generator.getTypeScriptType("((uint64,uint64),string,byte[])[]"),
+    ).toBe("[[uint64, uint64], string, Uint8Array][]");
+    expect(generator.getTypeScriptType("Outputs[1][]")).toBe("Outputs[][]");
+    const helpers = generator.getStructTupleHelperLines().join("\n");
+    expect(helpers).toContain(
+      "value: [[[uint64, uint64], string, Uint8Array][], [uint64, uint64][][]]",
+    );
+    const { outputText } = ts.transpileModule(helpers, {
+      compilerOptions: { module: ts.ModuleKind.CommonJS },
+    });
+    const exports: Record<string, (value: unknown) => unknown> = {};
+    runInNewContext(outputText, { exports });
+    const tuple = [[[[1n, 2n], "hi", new Uint8Array([3, 4])]], [[[5n, 6n]]]];
+    const value = {
+      entries: [[[1n, 2n], "hi", new Uint8Array([3, 4])]],
+      outputs: [[{ sum: 5n, difference: 6n }]],
+    };
+    expect(exports.WrapperFromTuple?.(tuple)).toEqual(value);
+    expect(exports.WrapperToTuple?.(value)).toEqual(tuple);
   });
 
   it.each(["global", "local", "box"] as const)(

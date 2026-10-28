@@ -1,6 +1,7 @@
 import algosdk from "algosdk";
 import {
   getAbiMethodFromDefinition,
+  getStructForType,
   type ARC56Contract,
   type StructFields,
   type StructField,
@@ -18,6 +19,17 @@ export interface ARC56GeneratorOptions {
    * types from. Defaults to "@algosdk/transaction-composer".
    */
   composerImportPath?: string;
+}
+
+interface TypeConversion {
+  /** The TypeScript type of the in-memory value */
+  tsType: string;
+  /** The TypeScript type of the value's tuple representation */
+  tupleType: string;
+  /** Expression converting a tuple expression to the in-memory value */
+  fromTuple: (expr: string) => string;
+  /** Expression converting an in-memory value expression to its tuple */
+  toTuple: (expr: string) => string;
 }
 
 export class ARC56Generator {
@@ -64,6 +76,15 @@ export class ARC56Generator {
       return `Uint8Array${outerDimensions.replace(/\[\d+\]/g, "[]")}`;
     }
 
+    // Resolve named struct references and their array dimensions.
+    const structMatch = getStructForType(this.arc56, type);
+    if (structMatch) {
+      const structName = this.getStructTypeName(structMatch.name);
+      if (structName) {
+        return `${structName}${"[]".repeat(structMatch.arrayDepth)}`;
+      }
+    }
+
     const array = type.match(/^(.*)\[\d*\]$/);
     if (array) {
       return `${this.getTypeScriptType(array[1] ?? "")}[]`;
@@ -81,6 +102,168 @@ export class ARC56Generator {
       .replace(/\[\d+\]/g, "[]")
       .replaceAll("(", "[")
       .replaceAll(")", "]");
+  }
+
+  /** The TypeScript name of a struct, if its ARC56 name can be a type name */
+  private getStructTypeName(structName: string): string | undefined {
+    if (structName.includes(" ")) return undefined;
+    const cleanName = structName.split(".").at(-1) ?? "";
+    return /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(cleanName) ? cleanName : undefined;
+  }
+
+  private propertyAccess(expr: string, key: string): string {
+    return /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(key)
+      ? `${expr}.${key}`
+      : `${expr}[${JSON.stringify(key)}]`;
+  }
+
+  private propertyKey(key: string): string {
+    return /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(key) ? key : JSON.stringify(key);
+  }
+
+  /** Build an expression that maps every leaf of nested arrays `depth` deep */
+  private mapArrayDepth(
+    expr: string,
+    depth: number,
+    convert: (expr: string) => string,
+    level = 0,
+  ): string {
+    if (depth === 0) return convert(expr);
+    const item = `item${level}`;
+    return `${expr}.map((${item}) => ${this.mapArrayDepth(
+      item,
+      depth - 1,
+      convert,
+      level + 1,
+    )})`;
+  }
+
+  private getTypeConversion(
+    def: StructField[] | StructFields | StructField["type"],
+  ): TypeConversion {
+    if (typeof def !== "string") {
+      return this.getStructConversion(def);
+    }
+    return this.getTypeStringConversion(def);
+  }
+
+  /** Conversion between a struct's tuple layout and its object form */
+  private getStructConversion(
+    def: StructField[] | StructFields,
+  ): TypeConversion {
+    const fields: Array<{
+      name: string;
+      type: StructField[] | StructFields | StructField["type"];
+    }> = Array.isArray(def)
+      ? def.map((field) => ({ name: field.name, type: field.type }))
+      : Object.entries(def).map(([name, type]) => ({ name, type }));
+
+    const conversions = fields.map((field) =>
+      this.getTypeConversion(field.type),
+    );
+
+    return {
+      tsType: this.structDefToTsType(def),
+      tupleType: `[${conversions.map((c) => c.tupleType).join(", ")}]`,
+      fromTuple: (expr) =>
+        `{ ${fields
+          .map(
+            (field, i) =>
+              `${this.propertyKey(field.name)}: ${conversions[i]?.fromTuple(
+                `${expr}[${i}]`,
+              )}`,
+          )
+          .join(", ")} }`,
+      toTuple: (expr) =>
+        `[${fields
+          .map((field, i) =>
+            conversions[i]?.toTuple(this.propertyAccess(expr, field.name)),
+          )
+          .join(", ")}]`,
+    };
+  }
+
+  private getTypeStringConversion(type: string): TypeConversion {
+    const tsType = this.getTypeScriptType(type);
+    const identity: TypeConversion = {
+      tsType,
+      tupleType: tsType,
+      fromTuple: (expr) => expr,
+      toTuple: (expr) => expr,
+    };
+
+    const match = getStructForType(this.arc56, type);
+    const def = match ? this.arc56.structs?.[match.name] : undefined;
+    if (!match || !def) return identity;
+
+    const structName = this.getStructTypeName(match.name);
+    const structConversion = this.getStructConversion(def);
+    const tupleType = `${structConversion.tupleType}${"[]".repeat(
+      match.arrayDepth,
+    )}`;
+
+    if (!structName) {
+      // An anonymous struct has no exported type or helper, so inline its
+      // conversion instead
+      return {
+        tsType: this.structDefToTsType(def),
+        tupleType,
+        fromTuple: (expr) =>
+          this.mapArrayDepth(
+            expr,
+            match.arrayDepth,
+            structConversion.fromTuple,
+          ),
+        toTuple: (expr) =>
+          this.mapArrayDepth(expr, match.arrayDepth, structConversion.toTuple),
+      };
+    }
+
+    return {
+      tsType: `${structName}${"[]".repeat(match.arrayDepth)}`,
+      tupleType,
+      fromTuple: (expr) =>
+        this.mapArrayDepth(
+          expr,
+          match.arrayDepth,
+          (value) => `${structName}FromTuple(${value})`,
+        ),
+      toTuple: (expr) =>
+        this.mapArrayDepth(
+          expr,
+          match.arrayDepth,
+          (value) => `${structName}ToTuple(${value})`,
+        ),
+    };
+  }
+
+  /** Helpers converting each struct to and from its tuple representation */
+  getStructTupleHelperLines(): string[] {
+    const structs = this.arc56.structs;
+    if (!structs || Object.keys(structs).length === 0) return [];
+
+    const lines = [
+      "// Helpers for converting ARC56 structs to and from tuple representations",
+    ];
+
+    for (const [structName, def] of Object.entries(structs)) {
+      const name = this.getStructTypeName(structName);
+      if (!name) continue;
+
+      const conversion = this.getStructConversion(def);
+      lines.push(
+        `/** Convert the tuple representation of ${name} to ${name} */`,
+        `export function ${name}FromTuple(value: ${conversion.tupleType}): ${name} {`,
+        `  return ${conversion.fromTuple("value")};`,
+        `}`,
+        `/** Convert ${name} to its tuple representation */`,
+        `export function ${name}ToTuple(value: ${name}): ${conversion.tupleType} {`,
+        `  return ${conversion.toTuple("value")};`,
+        `}`,
+      );
+    }
+
+    return lines.length === 1 ? [] : lines;
   }
 
   private structDefToTsType(
@@ -751,6 +934,8 @@ export const APP_SPEC = JSON.parse(ARC56_JSON) as ARC56Contract;
 ${this.getABITypeLines().join("\n")}
 
 ${this.getStructTypeLines().join("\n")}
+
+${this.getStructTupleHelperLines().join("\n")}
 
 ${this.getReturnTypesLines().join("\n")}
 
