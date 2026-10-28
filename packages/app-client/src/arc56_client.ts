@@ -14,9 +14,9 @@ import {
   type ARC56Contract,
   type Method,
   type StorageMap,
-  getABIType as utilsGetABIType,
-  getABIValue as utilsGetABIValue,
-  getTypeScriptValue as utilsGetTypeScriptValue,
+  encodeValue,
+  decodeValue,
+  getABIValue,
   decodeMethodReturnValue as utilsDecodeMethodReturnValue,
   getAbiMethod,
   parseLogicError,
@@ -385,52 +385,13 @@ export class ARC56AppClient {
     }
   }
 
-  private getABIType(type: string): string {
-    return utilsGetABIType(this.arc56, type);
-  }
-
   private getABIEncodedValue(value: unknown, type: string): Uint8Array {
-    if (type === "bytes" || type === "AVMBytes") {
-      if (typeof value === "string") {
-        return new TextEncoder().encode(value);
-      }
-      if (value instanceof Uint8Array) {
-        return value;
-      }
-      if (ArrayBuffer.isView(value) || Array.isArray(value)) {
-        return new Uint8Array(value as ArrayLike<number>);
-      }
-      return new Uint8Array();
-    }
-    if (type === "AVMString") {
-      if (typeof value === "string") {
-        return new TextEncoder().encode(value);
-      }
-      if (value instanceof Uint8Array) {
-        return value;
-      }
-      if (ArrayBuffer.isView(value) || Array.isArray(value)) {
-        return new Uint8Array(value as ArrayLike<number>);
-      }
-      return new Uint8Array();
-    }
-    if (type === "AVMUint64") {
-      const uintVal =
-        typeof value === "bigint"
-          ? value
-          : typeof value === "number" || typeof value === "string"
-            ? BigInt(value)
-            : 0n;
-      return algosdk.encodeUint64(uintVal);
-    }
-
-    const abiType = this.getABIType(type);
-    return algosdk.ABIType.from(abiType).encode(this.getABIValue(type, value));
+    return encodeValue(this.arc56, type, value);
   }
 
   /** Get the typescript value, which may be the ABIValue or the struct */
-  private getTypeScriptValue(type: string, value: Uint8Array): unknown {
-    return utilsGetTypeScriptValue(this.arc56, type, value);
+  private decodeTypeValue(type: string, value: Uint8Array): unknown {
+    return decodeValue(this.arc56, type, value);
   }
 
   private resolveAddress(
@@ -542,7 +503,7 @@ export class ARC56AppClient {
       throw new Error(`${storage} state key not found: ${b64Key}`);
     }
 
-    return this.getTypeScriptValue(type, this.stateValueBytes(keyValue.value));
+    return this.decodeTypeValue(type, this.stateValueBytes(keyValue.value));
   }
 
   /** Decode every ARC56 key and map entry in raw global, local or box state */
@@ -571,7 +532,7 @@ export class ARC56AppClient {
     for (const { key: keyBytes, value: valueBytes } of state) {
       const keyDef = keyDefs.find(({ key }) => bytesEqual(key, keyBytes));
       if (keyDef) {
-        decoded.keys[keyDef.name] = this.getTypeScriptValue(
+        decoded.keys[keyDef.name] = this.decodeTypeValue(
           keyDef.k.valueType,
           valueBytes,
         );
@@ -582,7 +543,7 @@ export class ARC56AppClient {
         if (!startsWith(keyBytes, prefix)) continue;
         let key: unknown;
         try {
-          key = this.getTypeScriptValue(
+          key = this.decodeTypeValue(
             map.keyType,
             keyBytes.subarray(prefix.length),
           );
@@ -590,7 +551,7 @@ export class ARC56AppClient {
           // Not an entry of this map, so try the next one
           continue;
         }
-        const value = this.getTypeScriptValue(map.valueType, valueBytes);
+        const value = this.decodeTypeValue(map.valueType, valueBytes);
         decoded.maps[name]?.push({ key, value });
         break;
       }
@@ -622,7 +583,7 @@ export class ARC56AppClient {
       result.value instanceof Uint8Array
         ? result.value
         : algosdk.base64ToBytes(result.value);
-    return this.getTypeScriptValue(type, bytes);
+    return this.decodeTypeValue(type, bytes);
   }
 
   private async getGlobalStateValue(
@@ -635,10 +596,6 @@ export class ARC56AppClient {
       type,
       "Global",
     );
-  }
-
-  private getABIValue(type: string, value: unknown): algosdk.ABIValue {
-    return utilsGetABIValue(this.arc56, type, value);
   }
 
   getParams<TReturn = unknown>(
@@ -656,7 +613,7 @@ export class ARC56AppClient {
     const encodedArgs = rawArgs.map((a, i) => {
       const argDef = arc56Method.args[i];
       if (!argDef) return a as algosdk.ABIValue;
-      return this.getABIValue(argDef.struct ?? argDef.type, a);
+      return getABIValue(this.arc56, argDef.struct ?? argDef.type, a);
     });
 
     let boxes = params.boxes;
