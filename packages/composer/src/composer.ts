@@ -108,7 +108,7 @@ export type ARC56MethodParams = BaseMethodParams & {
 export type StandardMethodParams = BaseMethodParams & {
   arc56?: undefined;
   method: algosdk.ABIMethod;
-  methodArgs?: algosdk.ABIArgument[];
+  methodArgs?: (algosdk.ABIArgument | TransactionArgs[keyof TransactionArgs])[];
 };
 
 declare const methodReturnType: unique symbol;
@@ -183,6 +183,75 @@ export type TransactionParams =
   | { assetTransfer: AssetTransferParams }
   | { txn: algosdk.TransactionWithSigner };
 
+/** Params for a single transaction the composer builds, other than a method call */
+export type TransactionArgParams = Exclude<
+  TransactionParams,
+  { method: MethodParams } | { txn: algosdk.TransactionWithSigner }
+>;
+
+/**
+ * What an ABI method accepts for each transaction argument type, other than a
+ * pre-built TransactionWithSigner. Types that identify a single kind of
+ * transaction take its params directly, while `acfg`, `appl` and `txn` take
+ * them keyed by kind (e.g. `{ assetCreate: { ... } }`). The keyed form is
+ * accepted for every type.
+ */
+export type TransactionArgs = {
+  pay: PaymentParams;
+  axfer: AssetTransferParams;
+  afrz: AssetFreezeParams;
+  keyreg: KeyRegParams;
+  acfg:
+    | { assetCreate: AssetCreateParams }
+    | { assetConfig: AssetConfigParams }
+    | { assetDestroy: AssetDestroyParams };
+  appl: { appCreate: AppCreateParams } | { appCall: AppCallParams };
+  txn: TransactionArgParams;
+};
+
+/** A transaction argument of the given ABI type, built or as params */
+export type TransactionArg<T extends keyof TransactionArgs> =
+  TransactionArgs[T] | algosdk.TransactionWithSigner;
+
+/** The ABI transaction type of the transaction each kind of params builds */
+const transactionArgTypes = {
+  pay: "pay",
+  appCreate: "appl",
+  appCall: "appl",
+  keyReg: "keyreg",
+  assetCreate: "acfg",
+  assetConfig: "acfg",
+  assetDestroy: "acfg",
+  assetFreeze: "afrz",
+  assetTransfer: "axfer",
+} as const;
+
+/** The kind of params that an ABI transaction type can take directly */
+const bareTransactionArgKinds: Partial<
+  Record<string, keyof typeof transactionArgTypes>
+> = {
+  pay: "pay",
+  axfer: "assetTransfer",
+  afrz: "assetFreeze",
+  keyreg: "keyReg",
+};
+
+/** The keyed params in a method argument, or undefined if it is not keyed */
+function keyedTransactionArg(
+  arg: object,
+):
+  | { kind: keyof typeof transactionArgTypes; params: TransactionArgParams }
+  | undefined {
+  const keys = Object.keys(arg);
+  const kind = keys[0];
+  if (keys.length !== 1 || kind === undefined) return undefined;
+  if (!Object.hasOwn(transactionArgTypes, kind)) return undefined;
+  return {
+    kind: kind as keyof typeof transactionArgTypes,
+    params: arg as TransactionArgParams,
+  };
+}
+
 /** The overridable params of a transaction this composer builds itself */
 function paramOverridesOf(
   p: Exclude<TransactionParams, { txn: algosdk.TransactionWithSigner }>,
@@ -214,6 +283,17 @@ function assertMutuallyExclusiveFeeParams(p: ParamOverrides) {
   ) {
     throw Error("maxUsage cannot be combined with staticFee or staticUsage");
   }
+}
+
+/** Fee handling info for a transaction the composer builds from params */
+function txnInfoOf(p: ParamOverrides): TxnInfo {
+  return {
+    feePercent: p.feePercent,
+    maxUsage: p.maxUsage,
+    staticUsage: p.staticUsage,
+    isStatic: p.staticFee !== undefined || p.staticUsage !== undefined,
+    sender: p.sender,
+  };
 }
 
 export interface MethodResult<TReturn = unknown> extends Omit<
@@ -370,9 +450,9 @@ export class TransactionComposer<TReturns extends unknown[] = []> {
 
   /**
    * Convert a method argument that an ABI method expects to be a transaction
-   * into a TransactionWithSigner. A `pay` argument may be supplied as a
-   * PaymentParams object, in which case this builder constructs the payment
-   * transaction. All other transaction types must already be built.
+   * into a TransactionWithSigner. The argument may already be built, or be
+   * params for the composer to build: keyed by kind (e.g. `{ assetCreate }`)
+   * for any type, or bare for a type that identifies one kind (e.g. `axfer`).
    */
   private async buildTxnArg(
     arg: unknown,
@@ -392,31 +472,114 @@ export class TransactionComposer<TReturns extends unknown[] = []> {
       };
     }
 
-    if (argType === "pay") {
-      const paymentParams = arg as PaymentParams;
-      assertMutuallyExclusiveFeeParams(paymentParams);
-      const sdkParams = await this.getSdkParams(paymentParams);
-      const txn = algosdk.makePaymentTxnWithSuggestedParamsFromObject({
-        ...paymentParams,
-        ...sdkParams,
-      });
-      return {
-        arg: { txn, signer: sdkParams.signer },
-        txnInfo: {
-          feePercent: paymentParams.feePercent,
-          maxUsage: paymentParams.maxUsage,
-          staticUsage: paymentParams.staticUsage,
-          isStatic:
-            paymentParams.staticFee !== undefined ||
-            paymentParams.staticUsage !== undefined,
-          sender: paymentParams.sender,
-        },
-      };
+    let params: TransactionArgParams | undefined;
+    if (typeof arg === "object" && arg !== null) {
+      const keyed = keyedTransactionArg(arg);
+      const bareKind = bareTransactionArgKinds[argType];
+      if (keyed) {
+        if (argType !== "txn" && transactionArgTypes[keyed.kind] !== argType) {
+          throw new Error(
+            `Params for ${keyed.kind} build a "${transactionArgTypes[keyed.kind]}" transaction, but the method argument is "${argType}"`,
+          );
+        }
+        params = keyed.params;
+      } else if (bareKind !== undefined) {
+        params = { [bareKind]: arg } as TransactionArgParams;
+      }
     }
 
-    throw new Error(
-      `Unsupported transaction type "${argType}" for method argument. Expected a TransactionWithSigner.`,
-    );
+    if (params === undefined) {
+      throw new Error(
+        `Unsupported value for "${argType}" method argument. Expected a TransactionWithSigner or params keyed by transaction kind (e.g. { assetTransfer: { ... } }).`,
+      );
+    }
+
+    const overrides = paramOverridesOf(params);
+    assertMutuallyExclusiveFeeParams(overrides);
+    return { arg: await this.buildTxn(params), txnInfo: txnInfoOf(overrides) };
+  }
+
+  /** Build a transaction that is not a method call from its params */
+  private async buildTxn(
+    p: TransactionArgParams,
+  ): Promise<algosdk.TransactionWithSigner> {
+    if ("pay" in p) {
+      const sdkParams = await this.getSdkParams(p.pay);
+      const txn = algosdk.makePaymentTxnWithSuggestedParamsFromObject({
+        ...p.pay,
+        ...sdkParams,
+      });
+      return { txn, signer: sdkParams.signer };
+    }
+    if ("appCreate" in p) {
+      const sdkParams = await this.getSdkParams(p.appCreate);
+      const txn = algosdk.makeApplicationCreateTxnFromObject({
+        ...p.appCreate,
+        ...sdkParams,
+        onComplete: p.appCreate.onComplete ?? OnApplicationComplete.NoOpOC,
+      });
+      return { txn, signer: sdkParams.signer };
+    }
+    if ("appCall" in p) {
+      const { onComplete, ...rest } = p.appCall;
+      const sdkParams = await this.getSdkParams(rest);
+      const txn = algosdk.makeApplicationCallTxnFromObject({
+        ...rest,
+        ...sdkParams,
+        appIndex: p.appCall.appID,
+        onComplete: onComplete ?? OnApplicationComplete.NoOpOC,
+      });
+      return { txn, signer: sdkParams.signer };
+    }
+    if ("keyReg" in p) {
+      const sdkParams = await this.getSdkParams(p.keyReg);
+      const txn = algosdk.makeKeyRegistrationTxnWithSuggestedParamsFromObject({
+        ...p.keyReg,
+        ...sdkParams,
+      });
+      return { txn, signer: sdkParams.signer };
+    }
+    if ("assetCreate" in p) {
+      const sdkParams = await this.getSdkParams(p.assetCreate);
+      const txn = algosdk.makeAssetCreateTxnWithSuggestedParamsFromObject({
+        ...p.assetCreate,
+        ...sdkParams,
+      });
+      return { txn, signer: sdkParams.signer };
+    }
+    if ("assetConfig" in p) {
+      const sdkParams = await this.getSdkParams(p.assetConfig);
+      const txn = algosdk.makeAssetConfigTxnWithSuggestedParamsFromObject({
+        ...p.assetConfig,
+        ...sdkParams,
+      });
+      return { txn, signer: sdkParams.signer };
+    }
+    if ("assetDestroy" in p) {
+      const sdkParams = await this.getSdkParams(p.assetDestroy);
+      const txn = algosdk.makeAssetDestroyTxnWithSuggestedParamsFromObject({
+        ...p.assetDestroy,
+        ...sdkParams,
+      });
+      return { txn, signer: sdkParams.signer };
+    }
+    if ("assetFreeze" in p) {
+      const sdkParams = await this.getSdkParams(p.assetFreeze);
+      const txn = algosdk.makeAssetFreezeTxnWithSuggestedParamsFromObject({
+        ...p.assetFreeze,
+        ...sdkParams,
+      });
+      return { txn, signer: sdkParams.signer };
+    }
+    if ("assetTransfer" in p) {
+      const sdkParams = await this.getSdkParams(p.assetTransfer);
+      const txn = algosdk.makeAssetTransferTxnWithSuggestedParamsFromObject({
+        ...p.assetTransfer,
+        ...sdkParams,
+      });
+      return { txn, signer: sdkParams.signer };
+    }
+    throw Error("Unsupported transaction params");
   }
 
   add(params: TransactionParams) {
@@ -778,85 +941,9 @@ export class TransactionComposer<TReturns extends unknown[] = []> {
         continue;
       }
 
-      if ("pay" in p) {
-        const sdkParams = await this.getSdkParams(p.pay);
-        const txn = algosdk.makePaymentTxnWithSuggestedParamsFromObject({
-          ...p.pay,
-          ...sdkParams,
-        });
-
-        atc.addTransaction({ txn, signer: sdkParams.signer });
-      } else if ("appCreate" in p) {
-        const sdkParams = await this.getSdkParams(p.appCreate);
-        const txn = algosdk.makeApplicationCreateTxnFromObject({
-          ...p.appCreate,
-          ...sdkParams,
-          onComplete: p.appCreate.onComplete ?? OnApplicationComplete.NoOpOC,
-        });
-
-        atc.addTransaction({ txn, signer: sdkParams.signer });
-      } else if ("appCall" in p) {
-        const { onComplete, ...rest } = p.appCall;
-        const sdkParams = await this.getSdkParams(rest);
-        const txn = algosdk.makeApplicationCallTxnFromObject({
-          ...rest,
-          ...sdkParams,
-          appIndex: p.appCall.appID,
-          onComplete: onComplete ?? OnApplicationComplete.NoOpOC,
-        });
-
-        atc.addTransaction({ txn, signer: sdkParams.signer });
-      } else if ("keyReg" in p) {
-        const sdkParams = await this.getSdkParams(p.keyReg);
-        const txn = algosdk.makeKeyRegistrationTxnWithSuggestedParamsFromObject(
-          {
-            ...p.keyReg,
-            ...sdkParams,
-          },
-        );
-
-        atc.addTransaction({ txn, signer: sdkParams.signer });
-      } else if ("assetCreate" in p) {
-        const sdkParams = await this.getSdkParams(p.assetCreate);
-        const txn = algosdk.makeAssetCreateTxnWithSuggestedParamsFromObject({
-          ...p.assetCreate,
-          ...sdkParams,
-        });
-
-        atc.addTransaction({ txn, signer: sdkParams.signer });
-      } else if ("assetConfig" in p) {
-        const sdkParams = await this.getSdkParams(p.assetConfig);
-        const txn = algosdk.makeAssetConfigTxnWithSuggestedParamsFromObject({
-          ...p.assetConfig,
-          ...sdkParams,
-        });
-
-        atc.addTransaction({ txn, signer: sdkParams.signer });
-      } else if ("assetDestroy" in p) {
-        const sdkParams = await this.getSdkParams(p.assetDestroy);
-        const txn = algosdk.makeAssetDestroyTxnWithSuggestedParamsFromObject({
-          ...p.assetDestroy,
-          ...sdkParams,
-        });
-
-        atc.addTransaction({ txn, signer: sdkParams.signer });
-      } else if ("assetFreeze" in p) {
-        const sdkParams = await this.getSdkParams(p.assetFreeze);
-        const txn = algosdk.makeAssetFreezeTxnWithSuggestedParamsFromObject({
-          ...p.assetFreeze,
-          ...sdkParams,
-        });
-
-        atc.addTransaction({ txn, signer: sdkParams.signer });
-      } else if ("assetTransfer" in p) {
-        const sdkParams = await this.getSdkParams(p.assetTransfer);
-        const txn = algosdk.makeAssetTransferTxnWithSuggestedParamsFromObject({
-          ...p.assetTransfer,
-          ...sdkParams,
-        });
-
-        atc.addTransaction({ txn, signer: sdkParams.signer });
-      } else if ("method" in p) {
+      if (!("method" in p)) {
+        atc.addTransaction(await this.buildTxn(p));
+      } else {
         const { arc56, appID, ...rawMethodParams } = p.method;
         const sdkParams = await this.getSdkParams(p.method);
 
@@ -924,36 +1011,26 @@ export class TransactionComposer<TReturns extends unknown[] = []> {
               "ARC56 definition is required when method is specified as a string",
             );
           }
-          const { methodArgs } = p.method;
-          if (methodArgs)
-            for (const arg of methodArgs) {
-              if (typeof arg === "object" && "txn" in arg) {
-                // Already built, so its fee is fixed and cannot cover anything else
-                this.txnInfo.push({
-                  sender: { address: arg.txn.sender, txnSigner: arg.signer },
-                  isStatic: true,
-                });
-              }
-            }
+          const { method } = p.method;
+          const methodArgs = [...(p.method.methodArgs ?? [])];
+          for (const [i, arg] of methodArgs.entries()) {
+            const argType = method.args[i]?.type;
+            if (!algosdk.abiTypeIsTransaction(argType)) continue;
+            const built = await this.buildTxnArg(arg, argType);
+            methodArgs[i] = built.arg;
+            this.txnInfo.push(built.txnInfo);
+          }
           atc.addMethodCall({
             ...rawMethodParams,
             ...sdkParams,
             appID,
-            method: p.method.method,
-            methodArgs: p.method.methodArgs,
+            method,
+            methodArgs: methodArgs as algosdk.ABIArgument[],
           });
         }
-      } else throw Error("Unsupported transaction params");
+      }
 
-      const { feePercent, maxUsage, staticFee, staticUsage, sender } =
-        paramOverridesOf(p);
-      this.txnInfo.push({
-        feePercent,
-        maxUsage,
-        staticUsage,
-        isStatic: staticFee !== undefined || staticUsage !== undefined,
-        sender,
-      });
+      this.txnInfo.push(txnInfoOf(paramOverridesOf(p)));
     }
 
     const simulated = algod ? await this.simulateForInfo(algod, request) : {};
