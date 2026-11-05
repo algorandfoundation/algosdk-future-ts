@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import algosdk from "algosdk";
-import { TransactionComposer } from "../src/composer";
+import {
+  TransactionComposer,
+  type ComposerSender,
+  type TransactionArgParams,
+} from "../src/composer";
 import type { ARC56Contract } from "../src/types/arc56";
 import arc56Json from "../../../fixtures/ARC56Test.arc56.json";
 
@@ -68,6 +72,175 @@ function setup() {
 }
 
 describe("TransactionComposer transaction method arguments", () => {
+  const operations: {
+    type: TransactionArgParams["type"];
+    abiType: string;
+    params: (sender: ComposerSender) => TransactionArgParams;
+  }[] = [
+    {
+      type: "pay",
+      abiType: "pay",
+      params: (sender) => ({
+        type: "pay",
+        sender,
+        receiver: sender.address,
+        amount: 0n,
+      }),
+    },
+    {
+      type: "assetTransfer",
+      abiType: "axfer",
+      params: (sender) => ({
+        type: "assetTransfer",
+        sender,
+        receiver: sender.address,
+        assetIndex: 1n,
+        amount: 0n,
+      }),
+    },
+    {
+      type: "assetFreeze",
+      abiType: "afrz",
+      params: (sender) => ({
+        type: "assetFreeze",
+        sender,
+        assetIndex: 1n,
+        freezeTarget: sender.address,
+        frozen: true,
+      }),
+    },
+    {
+      type: "keyReg",
+      abiType: "keyreg",
+      params: (sender) => ({ type: "keyReg", sender, nonParticipation: true }),
+    },
+    {
+      type: "assetCreate",
+      abiType: "acfg",
+      params: (sender) => ({
+        type: "assetCreate",
+        sender,
+        total: 1n,
+        decimals: 0,
+        defaultFrozen: false,
+      }),
+    },
+    {
+      type: "assetConfig",
+      abiType: "acfg",
+      params: (sender) => ({
+        type: "assetConfig",
+        sender,
+        assetIndex: 1n,
+        manager: sender.address,
+        strictEmptyAddressChecking: false,
+      }),
+    },
+    {
+      type: "assetDestroy",
+      abiType: "acfg",
+      params: (sender) => ({ type: "assetDestroy", sender, assetIndex: 1n }),
+    },
+    {
+      type: "appCreate",
+      abiType: "appl",
+      params: (sender) => ({
+        type: "appCreate",
+        sender,
+        approvalProgram: new Uint8Array([1]),
+        clearProgram: new Uint8Array([1]),
+        numGlobalInts: 0,
+        numGlobalByteSlices: 0,
+        numLocalInts: 0,
+        numLocalByteSlices: 0,
+      }),
+    },
+    {
+      type: "appCall",
+      abiType: "appl",
+      params: (sender) => ({ type: "appCall", sender, appID: 2n }),
+    },
+  ];
+
+  it.each(operations)(
+    "should build $type via add() and both method APIs",
+    async ({ params, abiType }) => {
+      const { sender, composer } = setup();
+      const arg = params(sender);
+      const direct = await composer.add(arg).buildGroupOffline();
+      for (const arc56 of [
+        undefined,
+        {
+          ...arc56WithPay,
+          methods: [
+            {
+              name: "deposit",
+              returns: { type: "void" },
+              actions: { create: [], call: ["NoOp"] },
+              args: [{ name: "transaction", type: abiType }],
+            },
+          ],
+        } satisfies ARC56Contract,
+      ]) {
+        const methodGroup = await setup()
+          .composer.addMethodCall({
+            arc56,
+            appID: 1n,
+            sender,
+            method: algosdk.ABIMethod.fromSignature(`deposit(${abiType})void`),
+            methodArgs: [arg],
+          })
+          .buildGroupOffline();
+        expect(methodGroup).toHaveLength(2);
+        const builtArg = methodGroup[0];
+        if (!builtArg) throw Error("Missing transaction argument");
+        builtArg.txn.group = undefined;
+        expect(builtArg.txn.toByte()).toEqual(direct[0]?.txn.toByte());
+        expect(methodGroup[0]?.signer).toBe(sender.txnSigner);
+      }
+    },
+  );
+
+  it("should accept method and pre-built transaction discriminators in add()", async () => {
+    const { sender, payment, composer } = setup();
+    const group = await composer
+      .add({ type: "txn", txn: payment, signer: sender.txnSigner })
+      .add({
+        type: "method",
+        sender,
+        appID: 1n,
+        method: algosdk.ABIMethod.fromSignature("deposit()void"),
+      })
+      .buildGroup(algod);
+    expect(group.map((t) => t.txn.fee)).toEqual([0n, 2_000n]);
+  });
+
+  it("should reject legacy keyed objects in add()", () => {
+    const { sender, composer } = setup();
+    expect(() =>
+      // @ts-expect-error add() requires a type discriminator
+      composer.add({ pay: { sender, receiver: sender.address, amount: 0n } }),
+    ).toThrow("type discriminator");
+  });
+
+  it.each([{ pay: {} }, { type: "unknown" }, { type: "method" }])(
+    "should reject unsupported transaction argument params: %j",
+    async (arg) => {
+      const { sender, composer } = setup();
+      await expect(
+        composer
+          .addMethodCall({
+            arc56: arc56WithPay,
+            appID: 1n,
+            sender,
+            method: "deposit",
+            methodArgs: [arg],
+          })
+          .buildGroupOffline(),
+      ).rejects.toThrow("type discriminator");
+    },
+  );
+
   it("should keep the fee of a pre-built argument to an ARC56 method", async () => {
     const { sender, payment, composer } = setup();
     const txns = await composer
@@ -108,6 +281,7 @@ describe("TransactionComposer transaction method arguments", () => {
         sender,
         methodArgs: [
           {
+            type: "assetTransfer",
             sender,
             receiver: sender.address,
             assetIndex: 1n,
@@ -122,21 +296,21 @@ describe("TransactionComposer transaction method arguments", () => {
     expect(txns[0]?.signer).toBe(sender.txnSigner);
   });
 
-  it("should build keyed params for a txn argument", async () => {
+  it("should build discriminated params for a txn argument", async () => {
     const { sender, composer } = setup();
     const txns = await composer
       .addMethodCall({
         appID: 1n,
         method: algosdk.ABIMethod.fromSignature("deposit(txn)void"),
         sender,
-        methodArgs: [{ appCall: { sender, appID: 2n } }],
+        methodArgs: [{ type: "appCall", sender, appID: 2n }],
       })
       .buildGroupOffline();
 
     expect(txns[0]?.txn.applicationCall?.appIndex).toBe(2n);
   });
 
-  it("should reject keyed params of the wrong transaction type", async () => {
+  it("should reject params of the wrong transaction type", async () => {
     const { sender, composer } = setup();
     await expect(
       composer
@@ -144,7 +318,7 @@ describe("TransactionComposer transaction method arguments", () => {
           appID: 1n,
           method: algosdk.ABIMethod.fromSignature("deposit(acfg)void"),
           sender,
-          methodArgs: [{ appCall: { sender, appID: 2n } }],
+          methodArgs: [{ type: "appCall", sender, appID: 2n }],
         })
         .buildGroupOffline(),
     ).rejects.toThrow(
@@ -152,21 +326,19 @@ describe("TransactionComposer transaction method arguments", () => {
     );
   });
 
-  it("should reject bare params for a type that does not identify one kind", async () => {
+  it("should reject params without a discriminator", async () => {
     const { sender, composer } = setup();
     await expect(
       composer
         .addMethodCall({
+          arc56: arc56WithPay,
           appID: 1n,
-          method: algosdk.ABIMethod.fromSignature("deposit(acfg)void"),
+          method: "deposit",
           sender,
-          methodArgs: [
-            // @ts-expect-error acfg params must be keyed by kind
-            { sender, total: 1n, decimals: 0, defaultFrozen: false },
-          ],
+          methodArgs: [{ sender, receiver: sender.address, amount: 0n }],
         })
         .buildGroupOffline(),
-    ).rejects.toThrow('Unsupported value for "acfg" method argument');
+    ).rejects.toThrow('Unsupported value for "pay" method argument');
   });
 
   it("should apply fee params of an argument built from params", async () => {
@@ -178,7 +350,13 @@ describe("TransactionComposer transaction method arguments", () => {
         method: "deposit",
         sender,
         methodArgs: [
-          { sender, receiver: sender.address, amount: 0n, feePercent: 1 },
+          {
+            type: "pay",
+            sender,
+            receiver: sender.address,
+            amount: 0n,
+            feePercent: 1,
+          },
         ],
         feePercent: 0,
       })
@@ -195,7 +373,9 @@ describe("TransactionComposer transaction method arguments", () => {
           appID: 1n,
           method: algosdk.ABIMethod.fromSignature("deposit(keyreg)void"),
           sender,
-          methodArgs: [{ keyReg: { sender, staticFee: 0n, feePercent: 1 } }],
+          methodArgs: [
+            { type: "keyReg", sender, staticFee: 0n, feePercent: 1 },
+          ],
         })
         .buildGroupOffline(),
     ).rejects.toThrow(

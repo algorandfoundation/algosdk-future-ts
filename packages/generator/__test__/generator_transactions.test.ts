@@ -35,7 +35,7 @@ describe("generated transaction arguments", () => {
     },
   );
 
-  it("accepts signed transaction wrappers and params in params and call, but rejects plain transactions and mismatched params", async () => {
+  it("accepts signed wrappers and discriminated params, but rejects plain transactions, bare params and mismatched types", async () => {
     const code = await new ARC56Generator(arc56).generate();
     const usage = `
 declare const client: TransactionsClient;
@@ -43,10 +43,10 @@ declare const sender: algosdk.AddressWithTransactionSigner;
 declare const txn: algosdk.Transaction;
 declare const signer: algosdk.TransactionSigner;
 declare const signed: algosdk.TransactionWithSigner;
-declare const payment: TransactionArgs["pay"];
-declare const assetTransfer: TransactionArgs["axfer"];
-declare const assetFreeze: TransactionArgs["afrz"];
-declare const keyReg: TransactionArgs["keyreg"];
+declare const payment: PaymentParams;
+declare const assetTransfer: AssetTransferParams;
+declare const assetFreeze: AssetFreezeParams;
+declare const keyReg: KeyRegParams;
 declare const assetCreate: AssetCreateParams;
 declare const appCall: AppCallParams;
 ${[...transactionTypes, "pay"]
@@ -59,27 +59,44 @@ client.${api}.accept_${type}({ sender, args: { transaction: txn } });`,
     ]),
   )
   .join("\n")}
-client.params.accept_pay({ sender, args: { transaction: payment } });
-client.call.accept_pay({ sender, args: { transaction: payment } });
-client.call.accept_axfer({ sender, args: { transaction: assetTransfer } });
-client.call.accept_afrz({ sender, args: { transaction: assetFreeze } });
-client.call.accept_keyreg({ sender, args: { transaction: keyReg } });
-client.call.accept_acfg({ sender, args: { transaction: { assetCreate } } });
-client.call.accept_appl({ sender, args: { transaction: { appCall } } });
-client.call.accept_txn({ sender, args: { transaction: { pay: payment } } });
-client.call.accept_txn({ sender, args: { transaction: { assetCreate } } });
-// @ts-expect-error acfg params must be keyed by kind
+${[
+  ["pay", "pay", "payment"],
+  ["axfer", "assetTransfer", "assetTransfer"],
+  ["afrz", "assetFreeze", "assetFreeze"],
+  ["keyreg", "keyReg", "keyReg"],
+]
+  .flatMap(([type, kind, params]) =>
+    ["params", "call"].map(
+      (api) =>
+        `client.${api}.accept_${type}({ sender, args: { transaction: { ...${params}, type: "${kind}" } } });`,
+    ),
+  )
+  .join("\n")}
+client.call.accept_acfg({ sender, args: { transaction: { ...assetCreate, type: "assetCreate" } } });
+client.call.accept_appl({ sender, args: { transaction: { ...appCall, type: "appCall" } } });
+client.call.accept_txn({ sender, args: { transaction: { ...payment, type: "pay" } } });
+client.call.accept_txn({ sender, args: { transaction: { ...assetCreate, type: "assetCreate" } } });
+// @ts-expect-error Params require a type discriminator
 client.call.accept_acfg({ sender, args: { transaction: assetCreate } });
 // @ts-expect-error An app call is not an asset config transaction
-client.call.accept_acfg({ sender, args: { transaction: { appCall } } });
-// @ts-expect-error txn params must be keyed by kind
+client.call.accept_acfg({ sender, args: { transaction: { ...appCall, type: "appCall" } } });
+// @ts-expect-error An asset transfer is not a payment transaction
+client.call.accept_pay({ sender, args: { transaction: { ...assetTransfer, type: "assetTransfer" } } });
+// @ts-expect-error Params require a type discriminator even for pay
+client.call.accept_pay({ sender, args: { transaction: payment } });
+// @ts-expect-error Keyed params are no longer supported
+client.call.accept_pay({ sender, args: { transaction: { pay: payment } } });
+// @ts-expect-error txn params require a type discriminator
 client.call.accept_txn({ sender, args: { transaction: payment } });
 `;
     const imports = `
 import type {
   AppCallParams,
   AssetCreateParams,
-  TransactionArgs,
+  PaymentParams,
+  AssetTransferParams,
+  AssetFreezeParams,
+  KeyRegParams,
 } from "@algosdk/transaction-composer";
 `;
     const filename = `${import.meta.dirname}/TransactionsClient.ts`;
@@ -201,10 +218,18 @@ import type {
   );
 
   it.each([
-    ["pay", (address: algosdk.Address) => ({ receiver: address, amount: 0n })],
+    [
+      "pay",
+      (address: algosdk.Address) => ({
+        type: "pay",
+        receiver: address,
+        amount: 0n,
+      }),
+    ],
     [
       "axfer",
       (address: algosdk.Address) => ({
+        type: "assetTransfer",
         receiver: address,
         assetIndex: 1n,
         amount: 0n,
@@ -213,21 +238,30 @@ import type {
     [
       "afrz",
       (address: algosdk.Address) => ({
+        type: "assetFreeze",
         assetIndex: 1n,
         freezeTarget: address,
         frozen: true,
       }),
     ],
-    ["keyreg", () => ({ nonParticipation: true })],
+    ["keyreg", () => ({ type: "keyReg", nonParticipation: true })],
     [
       "acfg",
-      () => ({ assetCreate: { total: 1n, decimals: 0, defaultFrozen: false } }),
+      () => ({
+        type: "assetCreate",
+        total: 1n,
+        decimals: 0,
+        defaultFrozen: false,
+      }),
     ],
-    ["appl", () => ({ appCall: { appID: 2n } })],
+    ["appl", () => ({ type: "appCall", appID: 2n })],
     [
       "txn",
       (address: algosdk.Address) => ({
-        assetTransfer: { receiver: address, assetIndex: 1n, amount: 0n },
+        type: "assetTransfer",
+        receiver: address,
+        assetIndex: 1n,
+        amount: 0n,
       }),
     ],
   ] as const)("builds a %s argument from params", async (type, makeParams) => {
@@ -244,13 +278,7 @@ import type {
       genesisHash: new Uint8Array(32),
     };
     const params = makeParams(account.addr);
-    // Bare params take the sender alongside the other fields, keyed params
-    // take it within the params of their kind
-    const [key, value] = Object.entries(params)[0] ?? [];
-    const arg =
-      type === "acfg" || type === "appl" || type === "txn"
-        ? { [key as string]: { ...(value as object), sender } }
-        : { ...params, sender };
+    const arg = { ...params, sender };
     const group = await new TransactionComposer({
       getSuggestedParams: () => Promise.resolve(suggestedParams),
     })

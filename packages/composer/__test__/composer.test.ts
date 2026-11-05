@@ -187,7 +187,7 @@ describe("TransactionComposer ARC56", () => {
     });
   });
 
-  it("should build a payment transaction from PaymentParams passed as a pay method argument", async () => {
+  it("should build a payment transaction from discriminated params passed as a pay method argument", async () => {
     const arc56WithPay: ARC56Contract = {
       ...arc56,
       methods: [
@@ -207,7 +207,9 @@ describe("TransactionComposer ARC56", () => {
       appID: appId,
       method: "deposit",
       sender,
-      methodArgs: [{ sender, receiver: sender.address, amount: 1_000_000n }],
+      methodArgs: [
+        { type: "pay", sender, receiver: sender.address, amount: 1_000_000n },
+      ],
     });
 
     const txns = await composer.buildGroupOffline();

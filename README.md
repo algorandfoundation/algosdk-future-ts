@@ -41,6 +41,32 @@ Additionally, @algosdk/future uses some new features of algod to do things in a 
 
 The general pattern of the composer for both AlgoKit Utils and @algosdk/future is more or less the same. The composer takes in transaction parameters and can optionally do some of the mundane work (like setting suggestedParams) under the hood.
 
+### Transaction parameters
+
+`composer.add()` takes flat params with a `type` discriminator identifying the operation:
+
+```ts
+composer.add({ type: "pay", sender, receiver, amount: 1_000n });
+composer.add({ type: "assetDestroy", sender, assetIndex: 123n });
+composer.add({ type: "method", sender, appID, method, methodArgs: [] });
+composer.add({ type: "txn", txn, signer });
+```
+
+The operation names are `pay`, `assetTransfer`, `assetFreeze`, `keyReg`, `assetCreate`, `assetConfig`, `assetDestroy`, `appCreate`, `appCall`, `method`, and `txn`. Convenience methods such as `addPayment()` still take params without a discriminator.
+
+ABI transaction arguments use the same discriminated params, excluding `method` and `txn`. Pre-built arguments remain `{ txn, signer }` objects:
+
+```ts
+composer.addMethodCall({
+  sender,
+  appID,
+  method, // e.g. deposit(pay)void
+  methodArgs: [{ type: "pay", sender, receiver, amount: 1_000n }],
+});
+```
+
+Migration: replace `{ pay: params }` with `{ ...params, type: "pay" }` in `add()`, and add `type: "pay"` to payment method arguments previously supplied as bare params.
+
 ### extraFee and maxFee
 
 #### AlgoKit
@@ -109,7 +135,7 @@ composer
 ```
 
 > [!NOTE]
-> The `feePercent` values across a group must sum to 1. If no transaction in the group specifies `feePercent`, they all default to `1 / n` (an equal split). To make a specific transaction pay nothing, give it `feePercent: 0`. Transactions with a `staticFee` pay exactly that fee, and transactions with a `staticUsage` cover that much usage (their fee follows the current fee-per-usage); neither is ever adjusted. `staticFee`, `staticUsage` and `feePercent` are mutually exclusive. Pre-built transactions, whether added with `addTransaction` or passed as method arguments, always pay their own fixed fee and never contribute to other transactions. Transaction method arguments given as params instead (e.g. `{ assetTransfer: { ... } }`) take the same fee options as any other transaction. A transaction can also set `maxUsage` to cap the group usage its adjusted fee may pay for (derived from the current min fee). If its share of the group fee is more than that, `buildGroup`, `execute` and `simulate` throw. `maxUsage` cannot be combined with `staticFee` or `staticUsage`.
+> The `feePercent` values across a group must sum to 1. If no transaction in the group specifies `feePercent`, they all default to `1 / n` (an equal split). To make a specific transaction pay nothing, give it `feePercent: 0`. Transactions with a `staticFee` pay exactly that fee, and transactions with a `staticUsage` cover that much usage (their fee follows the current fee-per-usage); neither is ever adjusted. `staticFee`, `staticUsage` and `feePercent` are mutually exclusive. Pre-built transactions, whether added with `addTransaction` or passed as method arguments, always pay their own fixed fee and never contribute to other transactions. Transaction method arguments given as params instead (e.g. `{ type: "assetTransfer", ...params }`) take the same fee options as any other transaction. A transaction can also set `maxUsage` to cap the group usage its adjusted fee may pay for (derived from the current min fee). If its share of the group fee is more than that, `buildGroup`, `execute` and `simulate` throw. `maxUsage` cannot be combined with `staticFee` or `staticUsage`.
 
 ### Sender and Signer
 

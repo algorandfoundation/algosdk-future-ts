@@ -171,41 +171,39 @@ export type AppCallParams = Omit<
 };
 
 export type TransactionParams =
-  | { method: MethodParams }
-  | { pay: PaymentParams }
-  | { appCreate: AppCreateParams }
-  | { appCall: AppCallParams }
-  | { keyReg: KeyRegParams }
-  | { assetCreate: AssetCreateParams }
-  | { assetConfig: AssetConfigParams }
-  | { assetDestroy: AssetDestroyParams }
-  | { assetFreeze: AssetFreezeParams }
-  | { assetTransfer: AssetTransferParams }
-  | { txn: algosdk.TransactionWithSigner };
+  | ({ type: "method" } & MethodParams)
+  | ({ type: "pay" } & PaymentParams)
+  | ({ type: "appCreate" } & AppCreateParams)
+  | ({ type: "appCall" } & AppCallParams)
+  | ({ type: "keyReg" } & KeyRegParams)
+  | ({ type: "assetCreate" } & AssetCreateParams)
+  | ({ type: "assetConfig" } & AssetConfigParams)
+  | ({ type: "assetDestroy" } & AssetDestroyParams)
+  | ({ type: "assetFreeze" } & AssetFreezeParams)
+  | ({ type: "assetTransfer" } & AssetTransferParams)
+  | ({ type: "txn" } & algosdk.TransactionWithSigner);
 
 /** Params for a single transaction the composer builds, other than a method call */
 export type TransactionArgParams = Exclude<
   TransactionParams,
-  { method: MethodParams } | { txn: algosdk.TransactionWithSigner }
+  { type: "method" | "txn" }
 >;
 
 /**
  * What an ABI method accepts for each transaction argument type, other than a
- * pre-built TransactionWithSigner. Types that identify a single kind of
- * transaction take its params directly, while `acfg`, `appl` and `txn` take
- * them keyed by kind (e.g. `{ assetCreate: { ... } }`). The keyed form is
- * accepted for every type.
+ * pre-built TransactionWithSigner. Params use a `type` discriminator naming
+ * the builder operation (e.g. `{ type: "assetCreate", ...params }`).
  */
 export type TransactionArgs = {
-  pay: PaymentParams;
-  axfer: AssetTransferParams;
-  afrz: AssetFreezeParams;
-  keyreg: KeyRegParams;
-  acfg:
-    | { assetCreate: AssetCreateParams }
-    | { assetConfig: AssetConfigParams }
-    | { assetDestroy: AssetDestroyParams };
-  appl: { appCreate: AppCreateParams } | { appCall: AppCallParams };
+  pay: Extract<TransactionArgParams, { type: "pay" }>;
+  axfer: Extract<TransactionArgParams, { type: "assetTransfer" }>;
+  afrz: Extract<TransactionArgParams, { type: "assetFreeze" }>;
+  keyreg: Extract<TransactionArgParams, { type: "keyReg" }>;
+  acfg: Extract<
+    TransactionArgParams,
+    { type: "assetCreate" | "assetConfig" | "assetDestroy" }
+  >;
+  appl: Extract<TransactionArgParams, { type: "appCreate" | "appCall" }>;
   txn: TransactionArgParams;
 };
 
@@ -225,48 +223,6 @@ const transactionArgTypes = {
   assetFreeze: "afrz",
   assetTransfer: "axfer",
 } as const;
-
-/** The kind of params that an ABI transaction type can take directly */
-const bareTransactionArgKinds: Partial<
-  Record<string, keyof typeof transactionArgTypes>
-> = {
-  pay: "pay",
-  axfer: "assetTransfer",
-  afrz: "assetFreeze",
-  keyreg: "keyReg",
-};
-
-/** The keyed params in a method argument, or undefined if it is not keyed */
-function keyedTransactionArg(
-  arg: object,
-):
-  | { kind: keyof typeof transactionArgTypes; params: TransactionArgParams }
-  | undefined {
-  const keys = Object.keys(arg);
-  const kind = keys[0];
-  if (keys.length !== 1 || kind === undefined) return undefined;
-  if (!Object.hasOwn(transactionArgTypes, kind)) return undefined;
-  return {
-    kind: kind as keyof typeof transactionArgTypes,
-    params: arg as TransactionArgParams,
-  };
-}
-
-/** The overridable params of a transaction this composer builds itself */
-function paramOverridesOf(
-  p: Exclude<TransactionParams, { txn: algosdk.TransactionWithSigner }>,
-): ParamOverrides {
-  if ("method" in p) return p.method;
-  if ("pay" in p) return p.pay;
-  if ("appCreate" in p) return p.appCreate;
-  if ("appCall" in p) return p.appCall;
-  if ("keyReg" in p) return p.keyReg;
-  if ("assetCreate" in p) return p.assetCreate;
-  if ("assetConfig" in p) return p.assetConfig;
-  if ("assetDestroy" in p) return p.assetDestroy;
-  if ("assetFreeze" in p) return p.assetFreeze;
-  return p.assetTransfer;
-}
 
 /** staticFee, staticUsage and feePercent are mutually exclusive */
 function assertMutuallyExclusiveFeeParams(p: ParamOverrides) {
@@ -451,8 +407,8 @@ export class TransactionComposer<TReturns extends unknown[] = []> {
   /**
    * Convert a method argument that an ABI method expects to be a transaction
    * into a TransactionWithSigner. The argument may already be built, or be
-   * params for the composer to build: keyed by kind (e.g. `{ assetCreate }`)
-   * for any type, or bare for a type that identifies one kind (e.g. `axfer`).
+   * params for the composer to build, with a `type` discriminator identifying
+   * the operation (e.g. `{ type: "assetCreate", ...params }`).
    */
   private async buildTxnArg(
     arg: unknown,
@@ -473,224 +429,225 @@ export class TransactionComposer<TReturns extends unknown[] = []> {
     }
 
     let params: TransactionArgParams | undefined;
-    if (typeof arg === "object" && arg !== null) {
-      const keyed = keyedTransactionArg(arg);
-      const bareKind = bareTransactionArgKinds[argType];
-      if (keyed) {
-        if (argType !== "txn" && transactionArgTypes[keyed.kind] !== argType) {
+    if (typeof arg === "object" && arg !== null && "type" in arg) {
+      const kind = arg.type;
+      if (
+        typeof kind === "string" &&
+        Object.hasOwn(transactionArgTypes, kind)
+      ) {
+        const txnType =
+          transactionArgTypes[kind as keyof typeof transactionArgTypes];
+        if (argType !== "txn" && txnType !== argType) {
           throw new Error(
-            `Params for ${keyed.kind} build a "${transactionArgTypes[keyed.kind]}" transaction, but the method argument is "${argType}"`,
+            `Params for ${kind} build a "${txnType}" transaction, but the method argument is "${argType}"`,
           );
         }
-        params = keyed.params;
-      } else if (bareKind !== undefined) {
-        params = { [bareKind]: arg } as TransactionArgParams;
+        params = arg as TransactionArgParams;
       }
     }
 
     if (params === undefined) {
       throw new Error(
-        `Unsupported value for "${argType}" method argument. Expected a TransactionWithSigner or params keyed by transaction kind (e.g. { assetTransfer: { ... } }).`,
+        `Unsupported value for "${argType}" method argument. Expected a TransactionWithSigner or params with a type discriminator (e.g. { type: "assetTransfer", ...params }).`,
       );
     }
 
-    const overrides = paramOverridesOf(params);
-    assertMutuallyExclusiveFeeParams(overrides);
-    return { arg: await this.buildTxn(params), txnInfo: txnInfoOf(overrides) };
+    assertMutuallyExclusiveFeeParams(params);
+    return { arg: await this.buildTxn(params), txnInfo: txnInfoOf(params) };
   }
 
   /** Build a transaction that is not a method call from its params */
   private async buildTxn(
     p: TransactionArgParams,
   ): Promise<algosdk.TransactionWithSigner> {
-    if ("pay" in p) {
-      const sdkParams = await this.getSdkParams(p.pay);
+    if (p.type === "pay") {
+      const sdkParams = await this.getSdkParams(p);
       const txn = algosdk.makePaymentTxnWithSuggestedParamsFromObject({
-        ...p.pay,
+        ...p,
         ...sdkParams,
       });
       return { txn, signer: sdkParams.signer };
     }
-    if ("appCreate" in p) {
-      const sdkParams = await this.getSdkParams(p.appCreate);
+    if (p.type === "appCreate") {
+      const sdkParams = await this.getSdkParams(p);
       const txn = algosdk.makeApplicationCreateTxnFromObject({
-        ...p.appCreate,
+        ...p,
         ...sdkParams,
-        onComplete: p.appCreate.onComplete ?? OnApplicationComplete.NoOpOC,
+        onComplete: p.onComplete ?? OnApplicationComplete.NoOpOC,
       });
       return { txn, signer: sdkParams.signer };
     }
-    if ("appCall" in p) {
-      const { onComplete, ...rest } = p.appCall;
+    if (p.type === "appCall") {
+      const { onComplete, ...rest } = p;
       const sdkParams = await this.getSdkParams(rest);
       const txn = algosdk.makeApplicationCallTxnFromObject({
         ...rest,
         ...sdkParams,
-        appIndex: p.appCall.appID,
+        appIndex: p.appID,
         onComplete: onComplete ?? OnApplicationComplete.NoOpOC,
       });
       return { txn, signer: sdkParams.signer };
     }
-    if ("keyReg" in p) {
-      const sdkParams = await this.getSdkParams(p.keyReg);
+    if (p.type === "keyReg") {
+      const sdkParams = await this.getSdkParams(p);
       const txn = algosdk.makeKeyRegistrationTxnWithSuggestedParamsFromObject({
-        ...p.keyReg,
+        ...p,
         ...sdkParams,
       });
       return { txn, signer: sdkParams.signer };
     }
-    if ("assetCreate" in p) {
-      const sdkParams = await this.getSdkParams(p.assetCreate);
+    if (p.type === "assetCreate") {
+      const sdkParams = await this.getSdkParams(p);
       const txn = algosdk.makeAssetCreateTxnWithSuggestedParamsFromObject({
-        ...p.assetCreate,
+        ...p,
         ...sdkParams,
       });
       return { txn, signer: sdkParams.signer };
     }
-    if ("assetConfig" in p) {
-      const sdkParams = await this.getSdkParams(p.assetConfig);
+    if (p.type === "assetConfig") {
+      const sdkParams = await this.getSdkParams(p);
       const txn = algosdk.makeAssetConfigTxnWithSuggestedParamsFromObject({
-        ...p.assetConfig,
+        ...p,
         ...sdkParams,
       });
       return { txn, signer: sdkParams.signer };
     }
-    if ("assetDestroy" in p) {
-      const sdkParams = await this.getSdkParams(p.assetDestroy);
+    if (p.type === "assetDestroy") {
+      const sdkParams = await this.getSdkParams(p);
       const txn = algosdk.makeAssetDestroyTxnWithSuggestedParamsFromObject({
-        ...p.assetDestroy,
+        ...p,
         ...sdkParams,
       });
       return { txn, signer: sdkParams.signer };
     }
-    if ("assetFreeze" in p) {
-      const sdkParams = await this.getSdkParams(p.assetFreeze);
+    if (p.type === "assetFreeze") {
+      const sdkParams = await this.getSdkParams(p);
       const txn = algosdk.makeAssetFreezeTxnWithSuggestedParamsFromObject({
-        ...p.assetFreeze,
+        ...p,
         ...sdkParams,
       });
       return { txn, signer: sdkParams.signer };
     }
-    if ("assetTransfer" in p) {
-      const sdkParams = await this.getSdkParams(p.assetTransfer);
-      const txn = algosdk.makeAssetTransferTxnWithSuggestedParamsFromObject({
-        ...p.assetTransfer,
-        ...sdkParams,
-      });
-      return { txn, signer: sdkParams.signer };
-    }
-    throw Error("Unsupported transaction params");
+    const sdkParams = await this.getSdkParams(p);
+    const txn = algosdk.makeAssetTransferTxnWithSuggestedParamsFromObject({
+      ...p,
+      ...sdkParams,
+    });
+    return { txn, signer: sdkParams.signer };
   }
 
   add(params: TransactionParams) {
-    if (!("txn" in params)) {
-      assertMutuallyExclusiveFeeParams(paramOverridesOf(params));
+    if (
+      params.type !== "method" &&
+      params.type !== "txn" &&
+      !Object.hasOwn(transactionArgTypes, params.type)
+    ) {
+      throw Error(
+        "Unsupported transaction type. Expected params with a type discriminator",
+      );
+    }
+    if (params.type !== "txn") {
+      assertMutuallyExclusiveFeeParams(params);
     }
     this.pendingParams.push(params);
     return this;
   }
 
   addPayment(params: PaymentParams) {
-    return this.add({ pay: params });
+    return this.add({ ...params, type: "pay" });
   }
 
   /** Create an application with a bare (non-ABI) call */
   addAppCreate(params: AppCreateParams) {
-    return this.add({ appCreate: params });
+    return this.add({ ...params, type: "appCreate" });
   }
 
   /** Register or deregister the account as part of the network's proof of stake */
   addKeyReg(params: KeyRegParams) {
-    return this.add({ keyReg: params });
+    return this.add({ ...params, type: "keyReg" });
   }
 
   /** Create a new asset */
   addAssetCreate(params: AssetCreateParams) {
-    return this.add({ assetCreate: params });
+    return this.add({ ...params, type: "assetCreate" });
   }
 
   /** Change or remove the manager/reserve/freeze/clawback roles of an asset */
   addAssetConfig(params: AssetConfigParams) {
-    return this.add({ assetConfig: params });
+    return this.add({ ...params, type: "assetConfig" });
   }
 
   /** Destroy an asset, removing it from the ledger */
   addAssetDestroy(params: AssetDestroyParams) {
-    return this.add({ assetDestroy: params });
+    return this.add({ ...params, type: "assetDestroy" });
   }
 
   /** Freeze or unfreeze an account's holdings of an asset */
   addAssetFreeze(params: AssetFreezeParams) {
-    return this.add({ assetFreeze: params });
+    return this.add({ ...params, type: "assetFreeze" });
   }
 
   /** Transfer an asset (also used to opt an account into an asset) */
   addAssetTransfer(params: AssetTransferParams) {
-    return this.add({ assetTransfer: params });
+    return this.add({ ...params, type: "assetTransfer" });
   }
 
   /** Add a bare application call (update, delete, etc.) with the given OnComplete */
   addAppCall(params: AppCallParams) {
-    return this.add({ appCall: params });
+    return this.add({ ...params, type: "appCall" });
   }
 
   /** Update an application's approval and clear programs */
   addAppUpdate(params: AppCallParams) {
     return this.add({
-      appCall: {
-        ...params,
-        onComplete: algosdk.OnApplicationComplete.UpdateApplicationOC,
-      },
+      ...params,
+      type: "appCall",
+      onComplete: algosdk.OnApplicationComplete.UpdateApplicationOC,
     });
   }
 
   /** Delete an application */
   addAppDelete(params: AppCallParams) {
     return this.add({
-      appCall: {
-        ...params,
-        onComplete: algosdk.OnApplicationComplete.DeleteApplicationOC,
-      },
+      ...params,
+      type: "appCall",
+      onComplete: algosdk.OnApplicationComplete.DeleteApplicationOC,
     });
   }
 
   /** Opt an account in to an application */
   addAppOptIn(params: AppCallParams) {
     return this.add({
-      appCall: {
-        ...params,
-        onComplete: algosdk.OnApplicationComplete.OptInOC,
-      },
+      ...params,
+      type: "appCall",
+      onComplete: algosdk.OnApplicationComplete.OptInOC,
     });
   }
 
   /** Close out an account's state in an application */
   addAppCloseOut(params: AppCallParams) {
     return this.add({
-      appCall: {
-        ...params,
-        onComplete: algosdk.OnApplicationComplete.CloseOutOC,
-      },
+      ...params,
+      type: "appCall",
+      onComplete: algosdk.OnApplicationComplete.CloseOutOC,
     });
   }
 
   /** Clear an account's state in an application */
   addAppClearState(params: AppCallParams) {
     return this.add({
-      appCall: {
-        ...params,
-        onComplete: algosdk.OnApplicationComplete.ClearStateOC,
-      },
+      ...params,
+      type: "appCall",
+      onComplete: algosdk.OnApplicationComplete.ClearStateOC,
     });
   }
 
   /** Call an application with a no-op on completion */
   addAppNoOp(params: AppCallParams) {
     return this.add({
-      appCall: {
-        ...params,
-        onComplete: algosdk.OnApplicationComplete.NoOpOC,
-      },
+      ...params,
+      type: "appCall",
+      onComplete: algosdk.OnApplicationComplete.NoOpOC,
     });
   }
 
@@ -702,20 +659,20 @@ export class TransactionComposer<TReturns extends unknown[] = []> {
     signer?: TransactionSigner,
   ) {
     if (algosdk.isTransactionWithSigner(txn)) {
-      return this.add({ txn });
+      return this.add({ ...txn, type: "txn" });
     }
     if (signer === undefined) {
       throw Error(
         "A TransactionSigner is required when adding a Transaction that has no signer attached",
       );
     }
-    return this.add({ txn: { txn, signer } });
+    return this.add({ type: "txn", txn, signer });
   }
 
   addMethodCall<TReturn>(
     params: MethodParams<TReturn>,
   ): TransactionComposer<[...TReturns, TReturn]> {
-    this.add({ method: params });
+    this.add({ ...params, type: "method" });
     return this as unknown as TransactionComposer<[...TReturns, TReturn]>;
   }
 
@@ -931,32 +888,27 @@ export class TransactionComposer<TReturns extends unknown[] = []> {
   }> {
     const { atc } = this;
     for (const p of this.pendingParams) {
-      if ("txn" in p) {
+      if (p.type === "txn") {
         // Already built, so its fee is fixed and cannot cover anything else
-        atc.addTransaction(p.txn);
+        atc.addTransaction(p);
         this.txnInfo.push({
-          sender: { address: p.txn.txn.sender, txnSigner: p.txn.signer },
+          sender: { address: p.txn.sender, txnSigner: p.signer },
           isStatic: true,
         });
         continue;
       }
 
-      if (!("method" in p)) {
+      if (p.type !== "method") {
         atc.addTransaction(await this.buildTxn(p));
       } else {
-        const { arc56, appID, ...rawMethodParams } = p.method;
-        const sdkParams = await this.getSdkParams(p.method);
+        const { arc56, appID, ...rawMethodParams } = p;
+        const sdkParams = await this.getSdkParams(p);
 
         if (arc56) {
-          const { abiMethod, arc56Method } = getAbiMethod(
-            arc56,
-            p.method.method,
-          );
-          const rawArgs = p.method.methodArgs ?? [];
+          const { abiMethod, arc56Method } = getAbiMethod(arc56, p.method);
+          const rawArgs = p.methodArgs ?? [];
           const encodedArgs = encodeMethodArgs(arc56, arc56Method, rawArgs);
-          // ABI methods can take transactions as arguments (e.g. `pay`).
-          // Let the caller pass a PaymentParams object and build the
-          // transaction here, where we have access to the composer's params.
+          // Build discriminated transaction params using the composer's params.
           for (let i = 0; i < rawArgs.length; i++) {
             const argType = arc56Method.args[i]?.type;
             if (!algosdk.abiTypeIsTransaction(argType)) continue;
@@ -965,7 +917,7 @@ export class TransactionComposer<TReturns extends unknown[] = []> {
             this.txnInfo.push(built.txnInfo);
           }
 
-          let boxes = p.method.boxes;
+          let boxes = p.boxes;
           if (boxes === undefined && arc56Method.recommendations?.boxes) {
             const recBoxes = Array.isArray(arc56Method.recommendations.boxes)
               ? arc56Method.recommendations.boxes
@@ -977,19 +929,19 @@ export class TransactionComposer<TReturns extends unknown[] = []> {
           }
 
           const appAccounts =
-            p.method.appAccounts ??
+            p.appAccounts ??
             (arc56Method.recommendations?.accounts
               ? arc56Method.recommendations.accounts
               : undefined);
 
           const appForeignApps =
-            p.method.appForeignApps ??
+            p.appForeignApps ??
             (arc56Method.recommendations?.apps
               ? arc56Method.recommendations.apps.map(BigInt)
               : undefined);
 
           const appForeignAssets =
-            p.method.appForeignAssets ??
+            p.appForeignAssets ??
             (arc56Method.recommendations?.assets
               ? arc56Method.recommendations.assets.map(BigInt)
               : undefined);
@@ -1006,13 +958,13 @@ export class TransactionComposer<TReturns extends unknown[] = []> {
             ...(appForeignAssets !== undefined ? { appForeignAssets } : {}),
           });
         } else {
-          if (typeof p.method.method === "string") {
+          if (typeof p.method === "string") {
             throw new Error(
               "ARC56 definition is required when method is specified as a string",
             );
           }
-          const { method } = p.method;
-          const methodArgs = [...(p.method.methodArgs ?? [])];
+          const { method } = p;
+          const methodArgs = [...(p.methodArgs ?? [])];
           for (const [i, arg] of methodArgs.entries()) {
             const argType = method.args[i]?.type;
             if (!algosdk.abiTypeIsTransaction(argType)) continue;
@@ -1030,7 +982,7 @@ export class TransactionComposer<TReturns extends unknown[] = []> {
         }
       }
 
-      this.txnInfo.push(txnInfoOf(paramOverridesOf(p)));
+      this.txnInfo.push(txnInfoOf(p));
     }
 
     const simulated = algod ? await this.simulateForInfo(algod, request) : {};
@@ -1066,9 +1018,7 @@ export class TransactionComposer<TReturns extends unknown[] = []> {
   }
 
   private decodeResults(methodResults: algosdk.ABIResult[]): MethodResult[] {
-    const methodCalls = this.pendingParams
-      .filter((p): p is { method: MethodParams } => "method" in p)
-      .map((p) => p.method);
+    const methodCalls = this.pendingParams.filter((p) => p.type === "method");
 
     return methodResults.map((mr, idx) => {
       const callParams = methodCalls[idx];
