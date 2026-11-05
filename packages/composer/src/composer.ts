@@ -384,9 +384,10 @@ export class TransactionComposer<TReturns extends unknown[] = []> {
     if (algosdk.isTransactionWithSigner(arg)) {
       return {
         arg,
+        // Already built, so its fee is fixed and cannot cover anything else
         txnInfo: {
           sender: { address: arg.txn.sender, txnSigner: arg.signer },
-          isStatic: false,
+          isStatic: true,
         },
       };
     }
@@ -927,9 +928,10 @@ export class TransactionComposer<TReturns extends unknown[] = []> {
           if (methodArgs)
             for (const arg of methodArgs) {
               if (typeof arg === "object" && "txn" in arg) {
+                // Already built, so its fee is fixed and cannot cover anything else
                 this.txnInfo.push({
                   sender: { address: arg.txn.sender, txnSigner: arg.signer },
-                  isStatic: false,
+                  isStatic: true,
                 });
               }
             }
