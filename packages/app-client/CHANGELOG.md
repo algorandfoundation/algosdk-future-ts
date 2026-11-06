@@ -1,3 +1,9 @@
+# 0.7.1 - November 6th, 2026
+
+## Fixes
+
+- Simulate readonly method calls with the maximum extra opcode budget (256 × 700) so calls that need more than the base budget no longer fail.
+
 # 0.7.0 - October 16th, 2026
 
 ## Breaking Changes
