@@ -26,6 +26,12 @@ import {
 const APP_PAGE_SIZE = 2048;
 
 /**
+ * Extra opcode budget to simulate a readonly call with: 256 inner transactions
+ * at 700 opcodes each, the most extra budget a single app call can receive.
+ */
+const MAX_EXTRA_OPCODE_BUDGET = 256 * 700;
+
+/**
  * The number of extra program pages needed to hold both programs. The first
  * page is free, so a pair of programs totalling one page needs no extras.
  */
@@ -761,7 +767,11 @@ export class ARC56AppClient {
 
     const { simulateResponse, methodResults } = await composer.simulate(
       this.algod,
-      { skipSignatures: true, allowUnnamedResources: true },
+      {
+        skipSignatures: true,
+        allowUnnamedResources: true,
+        extraOpcodeBudget: MAX_EXTRA_OPCODE_BUDGET,
+      },
     );
 
     return {

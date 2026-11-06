@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll } from "vitest";
+import { describe, it, expect, beforeAll, vi } from "vitest";
 import algosdk from "algosdk";
 import { Localnet } from "@algosdk/localnet";
 import { ARC56AppClient } from "../src/arc56_client";
@@ -722,5 +722,77 @@ return`;
         methodArgs: [{ add: { a: 1n, b: 2n }, subtract: { a: 1n, b: 100n } }],
       }),
     ).rejects.toThrow("subtract.a must be greater than subtract.b");
+  });
+
+  it("should simulate readonly calls with the maximum extra opcode budget", async () => {
+    // Each loop iteration costs 9 opcodes, so 400 of them far exceed the 700
+    // opcodes a single app call gets without inner transactions
+    const approval = `#pragma version 10
+txn ApplicationID
+bz create
+pushint 0
+store 0
+loop:
+load 0
+pushint 400
+<
+bz done
+load 0
+pushint 1
++
+store 0
+b loop
+done:
+pushint 1
+return
+create:
+pushint 1
+return`;
+    const clear = `#pragma version 10
+pushint 1
+return`;
+
+    const approvalResult = await localnet.algod.compile(approval).do();
+    const clearResult = await localnet.algod.compile(clear).do();
+    const budgetArc56 = {
+      arcs: [4, 56],
+      name: "Budget",
+      structs: {},
+      state: {
+        schema: { global: { ints: 0, bytes: 0 }, local: { ints: 0, bytes: 0 } },
+        keys: { global: {}, local: {}, box: {} },
+        maps: { global: {}, local: {}, box: {} },
+      },
+      bareActions: { create: ["NoOp"], call: [] },
+      methods: [
+        {
+          name: "burn",
+          args: [],
+          returns: { type: "void" },
+          actions: { create: [], call: ["NoOp"] },
+          readonly: true,
+        },
+      ],
+      byteCode: { approval: approvalResult.result, clear: clearResult.result },
+    } as unknown as ARC56Contract;
+
+    const { appClient } = await ARC56AppClient.bareCreate({
+      arc56: budgetArc56,
+      algod: localnet.algod,
+      sender,
+    });
+
+    const simulate = vi.spyOn(localnet.algod, "simulateTransactions");
+    try {
+      await appClient.simulateMethodCall({ method: "burn", sender });
+
+      const budgets = simulate.mock.calls.map(
+        ([request]) => request.extraOpcodeBudget,
+      );
+      expect(budgets.length).toBeGreaterThan(0);
+      expect(budgets.every((budget) => budget === 256 * 700)).toBe(true);
+    } finally {
+      simulate.mockRestore();
+    }
   });
 });
