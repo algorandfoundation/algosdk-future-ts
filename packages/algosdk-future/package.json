@@ -1,6 +1,6 @@
 {
   "name": "@algosdk/future",
-  "version": "0.14.0",
+  "version": "0.14.1",
   "description": "Re-exports every @algosdk/future package",
   "repository": {
     "type": "git",
