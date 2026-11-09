@@ -11,7 +11,7 @@ import {
 } from "@algosdk/app-client";
 import {
   type MethodParams,
-  type PaymentParams,
+  type TransactionArg,
   type ARC56Contract,
 } from "@algosdk/transaction-composer";
 

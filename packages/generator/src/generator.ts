@@ -228,15 +228,10 @@ export class ARC56Generator {
         typeMap.push({ abiType: t, tsType: "string" });
       } else if (t === "bool") {
         typeMap.push({ abiType: t, tsType: "boolean" });
-      } else if (t === "pay") {
-        typeMap.push({
-          abiType: t,
-          tsType: "PaymentParams | algosdk.TransactionWithSigner",
-        });
       } else if (
-        ["axfer", "afrz", "keyreg", "appl", "acfg", "txn"].includes(t)
+        ["pay", "axfer", "afrz", "keyreg", "appl", "acfg", "txn"].includes(t)
       ) {
-        typeMap.push({ abiType: t, tsType: "algosdk.TransactionWithSigner" });
+        typeMap.push({ abiType: t, tsType: `TransactionArg<"${t}">` });
       } else {
         typeMap.push({ abiType: t, tsType: "any" });
       }
@@ -728,7 +723,7 @@ import {
 } from "${appClientImportPath}";
 import {
   type MethodParams,
-  type PaymentParams,
+  type TransactionArg,
   type ARC56Contract,
 } from "${composerImportPath}";
 
