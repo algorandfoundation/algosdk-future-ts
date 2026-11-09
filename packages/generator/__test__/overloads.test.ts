@@ -9,11 +9,11 @@ import {
   type ARC56Contract,
 } from "@algosdk/transaction-composer";
 import { ARC56Generator } from "../src/generator";
-import arc56Json from "../../../fixtures/ARC56Test.arc56.json";
+import arc56Json from "../../../fixtures/arc56-test";
 
 function contract(...signatures: string[]): ARC56Contract {
   return {
-    ...(arc56Json as unknown as ARC56Contract),
+    ...arc56Json,
     name: "Overloads",
     structs: {},
     templateVariables: {},

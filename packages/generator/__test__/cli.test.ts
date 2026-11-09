@@ -7,7 +7,7 @@ import { describe, expect, it } from "vitest";
 
 const cli = fileURLToPath(new URL("../src/cli.ts", import.meta.url));
 const fixture = fileURLToPath(
-  new URL("../../../fixtures/ARC56Test.arc56.json", import.meta.url),
+  new URL("../../../fixtures/generated/ARC56Test.arc56.json", import.meta.url),
 );
 
 describe("CLI", () => {

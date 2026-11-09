@@ -1,91 +1,13 @@
 import { describe, it, expect, beforeAll } from "vitest";
 import algosdk from "algosdk";
 import { Localnet } from "@algosdk/localnet";
+import { ARC56AppClient } from "@algosdk/app-client";
+import { loadContract } from "../../../fixtures/arc56-test";
 import { TransactionComposer } from "../src/composer";
 import { populateAppCallResources } from "../src/resource_population";
 
-// Accesses whichever resource the first app arg names, without it being in
-// any reference array
-const APPROVAL = `#pragma version 10
-txn ApplicationID
-bz ok
-txna ApplicationArgs 0
-dup
-pushbytes "acct"
-==
-bnz acct
-dup
-pushbytes "app"
-==
-bnz app
-dup
-pushbytes "asset"
-==
-bnz asset
-dup
-pushbytes "box"
-==
-bnz box
-dup
-pushbytes "holding"
-==
-bnz holding
-dup
-pushbytes "local"
-==
-bnz local
-err
-acct:
-txna ApplicationArgs 1
-balance
-pop
-b ok
-app:
-txna ApplicationArgs 1
-btoi
-pushbytes "x"
-app_global_get_ex
-pop
-pop
-b ok
-asset:
-txna ApplicationArgs 1
-btoi
-asset_params_get AssetTotal
-pop
-pop
-b ok
-box:
-txna ApplicationArgs 1
-pushbytes "v"
-box_put
-b ok
-holding:
-txna ApplicationArgs 1
-txna ApplicationArgs 2
-btoi
-asset_holding_get AssetBalance
-pop
-pop
-b ok
-local:
-txna ApplicationArgs 1
-txna ApplicationArgs 2
-btoi
-app_opted_in
-pop
-b ok
-ok:
-pushint 1
-return
-`;
-
-const CLEAR = `#pragma version 10
-pushint 1
-`;
-
+const arc56 = loadContract("ResourcePopulation");
 const enc = (s: string) => new TextEncoder().encode(s);
-const u64 = (n: bigint) => algosdk.encodeUint64(n);
 
 describe("App call resource population", () => {
   const localnet = new Localnet();
@@ -95,25 +17,13 @@ describe("App call resource population", () => {
   let assetId: bigint;
   const otherAccount = algosdk.generateAccount().addr;
 
-  async function compile(teal: string) {
-    const { result } = await localnet.algod.compile(teal).do();
-    return new Uint8Array(Buffer.from(result, "base64"));
-  }
-
   async function createApp() {
-    const result = await localnet
-      .composer()
-      .addAppCreate({
-        sender,
-        approvalProgram: await compile(APPROVAL),
-        clearProgram: await compile(CLEAR),
-      })
-      .execute(localnet.algod);
-    const info = await localnet.algod
-      .pendingTransactionInformation(result.txIDs[0] ?? "")
-      .do();
-    if (info.applicationIndex === undefined) throw Error("App not created");
-    return info.applicationIndex;
+    const { appId } = await ARC56AppClient.bareCreate({
+      arc56,
+      algod: localnet.algod,
+      sender,
+    });
+    return appId;
   }
 
   beforeAll(async () => {
@@ -138,26 +48,26 @@ describe("App call resource population", () => {
     );
   });
 
-  const cases: Array<[string, () => Uint8Array[]]> = [
-    ["account", () => [enc("acct"), otherAccount.publicKey]],
-    ["app", () => [enc("app"), u64(otherAppId)]],
-    ["asset", () => [enc("asset"), u64(assetId)]],
-    ["box", () => [enc("box"), enc("someBox")]],
-    [
-      "asset holding",
-      () => [enc("holding"), otherAccount.publicKey, u64(assetId)],
-    ],
-    [
-      "app local",
-      () => [enc("local"), otherAccount.publicKey, u64(otherAppId)],
-    ],
+  const cases: Array<[string, string, () => unknown[]]> = [
+    ["account", "account", () => [otherAccount.toString()]],
+    ["app", "app", () => [otherAppId]],
+    ["asset", "asset", () => [assetId]],
+    ["box", "box", () => [enc("someBox")]],
+    ["asset holding", "holding", () => [otherAccount.toString(), assetId]],
+    ["app local", "local", () => [otherAccount.toString(), otherAppId]],
   ];
 
-  for (const [name, appArgs] of cases) {
+  for (const [name, method, methodArgs] of cases) {
     it(`populates an unreferenced ${name}`, async () => {
       const result = await localnet
         .composer()
-        .addAppNoOp({ sender, appID: appId, appArgs: appArgs() })
+        .addMethodCall({
+          arc56,
+          sender,
+          appID: appId,
+          method,
+          methodArgs: methodArgs(),
+        })
         .execute(localnet.algod);
       expect(result.txIDs.length).toBe(1);
     });
@@ -167,7 +77,13 @@ describe("App call resource population", () => {
         getSuggestedParams: () => localnet.algod.getTransactionParams().do(),
         populateAppCallResources: false,
       });
-      composer.addAppNoOp({ sender, appID: appId, appArgs: appArgs() });
+      composer.addMethodCall({
+        arc56,
+        sender,
+        appID: appId,
+        method,
+        methodArgs: methodArgs(),
+      });
       const error = await composer.execute(localnet.algod).then(
         () => undefined,
         (e: unknown) => e,
@@ -182,11 +98,19 @@ describe("App call resource population", () => {
   it("places resources across the group's app calls", async () => {
     const txns = await localnet
       .composer()
-      .addAppNoOp({ sender, appID: appId, appArgs: [enc("box"), enc("a")] })
-      .addAppNoOp({
+      .addMethodCall({
+        arc56,
         sender,
         appID: appId,
-        appArgs: [enc("holding"), otherAccount.publicKey, u64(assetId)],
+        method: "box",
+        methodArgs: [enc("a")],
+      })
+      .addMethodCall({
+        arc56,
+        sender,
+        appID: appId,
+        method: "holding",
+        methodArgs: [otherAccount.toString(), assetId],
       })
       .buildGroup(localnet.algod);
 
@@ -209,10 +133,12 @@ describe("App call resource population", () => {
   it("returns populated resources via simulate", async () => {
     const { simulateResponse } = await localnet
       .composer()
-      .addAppNoOp({
+      .addMethodCall({
+        arc56,
         sender,
         appID: appId,
-        appArgs: [enc("app"), u64(otherAppId)],
+        method: "app",
+        methodArgs: [otherAppId],
       })
       .simulate(localnet.algod);
     const group = simulateResponse.txnGroups[0];
