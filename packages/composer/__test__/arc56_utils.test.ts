@@ -185,9 +185,35 @@ describe("encodeValue invalid input", () => {
 
   it("throws for a non-numeric AVMUint64 instead of encoding zero", () => {
     expect(() => encodeValue(arc56, "AVMUint64", { a: 1 })).toThrow(
-      /Expected a bigint, number or numeric string for AVMUint64, got object/,
+      /Expected a bigint, integer or integer string for AVMUint64, got object/,
     );
     expect(() => encodeValue(arc56, "AVMUint64", undefined)).toThrow(TypeError);
+  });
+
+  it.each([1.5, NaN, "abc", "1.5", "", "-1"])(
+    "throws a TypeError for the non-integer AVMUint64 %j",
+    (value) => {
+      expect(() => encodeValue(arc56, "AVMUint64", value)).toThrow(
+        /Expected a bigint, integer or integer string for AVMUint64, got /,
+      );
+      expect(() => encodeValue(arc56, "AVMUint64", value)).toThrow(TypeError);
+    },
+  );
+
+  it.each([-1, -1n, 2n ** 64n, (2n ** 64n).toString()])(
+    "throws a RangeError for the out of range AVMUint64 %s",
+    (value) => {
+      expect(() => encodeValue(arc56, "AVMUint64", value)).toThrow(RangeError);
+    },
+  );
+
+  it("accepts integer strings and numbers for AVMUint64", () => {
+    expect(encodeValue(arc56, "AVMUint64", "18446744073709551615")).toEqual(
+      algosdk.encodeUint64(2n ** 64n - 1n),
+    );
+    expect(encodeValue(arc56, "AVMUint64", 5)).toEqual(
+      algosdk.encodeUint64(5n),
+    );
   });
 
   it("throws for unsupported bytes input instead of encoding empty bytes", () => {

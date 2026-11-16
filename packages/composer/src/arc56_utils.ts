@@ -313,14 +313,29 @@ function valueToBytes(value: unknown): Uint8Array {
   );
 }
 
+const MAX_UINT64 = 2n ** 64n - 1n;
+
 function valueToUint64(value: unknown): bigint {
-  if (typeof value === "bigint") return value;
-  if (typeof value === "number" || typeof value === "string") {
-    return BigInt(value);
+  let uint: bigint;
+  if (typeof value === "bigint") {
+    uint = value;
+  } else if (typeof value === "number" && Number.isInteger(value)) {
+    uint = BigInt(value);
+  } else if (typeof value === "string" && /^\d+$/.test(value)) {
+    uint = BigInt(value);
+  } else {
+    const got =
+      typeof value === "number" || typeof value === "string"
+        ? JSON.stringify(value)
+        : describeValue(value);
+    throw new TypeError(
+      `Expected a bigint, integer or integer string for AVMUint64, got ${got}`,
+    );
   }
-  throw new TypeError(
-    `Expected a bigint, number or numeric string for AVMUint64, got ${describeValue(value)}`,
-  );
+  if (uint < 0n || uint > MAX_UINT64) {
+    throw new RangeError(`AVMUint64 value ${uint} is out of range`);
+  }
+  return uint;
 }
 
 function describeValue(value: unknown): string {
