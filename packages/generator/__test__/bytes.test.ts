@@ -330,6 +330,26 @@ describe("ABI bytes", () => {
     expect(exports.WrapperToTuple?.(value)).toEqual(tuple);
   });
 
+  it("maps every struct in nested arrays of named structs", () => {
+    const arc56 = contract();
+    arc56.structs = {
+      Outputs: [
+        { name: "sum", type: "uint64" },
+        { name: "difference", type: "uint64" },
+      ],
+      Wrapper: [{ name: "grid", type: "Outputs[][2]" }],
+    };
+    const helpers = new ARC56Generator(arc56)
+      .getStructTupleHelperLines()
+      .join("\n");
+    expect(helpers).toContain(
+      "value[0].map((item0) => item0.map((item1) => OutputsFromTuple(item1)))",
+    );
+    expect(helpers).toContain(
+      "value.grid.map((item0) => item0.map((item1) => OutputsToTuple(item1)))",
+    );
+  });
+
   it.each(["global", "local", "box"] as const)(
     "decodes %s state keys and map values as Uint8Array",
     async (storage) => {
