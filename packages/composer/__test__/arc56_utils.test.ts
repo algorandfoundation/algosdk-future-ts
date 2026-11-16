@@ -233,6 +233,15 @@ describe("encodeValue invalid input", () => {
       encodeValue(arc56, "Outputs", { sum: 1n, difference: undefined }),
     ).toThrow(/Missing field "difference" for struct Outputs/);
   });
+
+  it("names a nested anonymous struct by its path when a field is missing", () => {
+    expect(() =>
+      encodeValue(arc56, "Inputs", {
+        add: { a: 1n, b: 2n },
+        subtract: { a: 1n },
+      }),
+    ).toThrow(/^Missing field "b" for struct Inputs\.subtract$/);
+  });
 });
 
 describe("encodeValue struct arrays", () => {

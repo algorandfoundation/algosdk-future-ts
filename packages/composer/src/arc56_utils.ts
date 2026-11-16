@@ -122,11 +122,17 @@ export function getABIValuesFromStructFieldsAndObject(
   const valuesArray: algosdk.ABIValue[] = [];
   const structLabel = structName ?? describeStructDef(structFields);
 
-  const pushValue = (val: StructDef, prop: unknown) => {
+  const pushValue = (key: string, val: StructDef, prop: unknown) => {
     if (typeof val !== "string") {
+      // Anonymous nested structs are labelled by their path, e.g. `Inputs.add`
       valuesArray.push(
         isRecord(prop)
-          ? getABIValuesFromStructFieldsAndObject(arc56, val, prop)
+          ? getABIValuesFromStructFieldsAndObject(
+              arc56,
+              val,
+              prop,
+              `${structLabel}.${key}`,
+            )
           : (prop as algosdk.ABIValue),
       );
       return;
@@ -150,11 +156,11 @@ export function getABIValuesFromStructFieldsAndObject(
 
   if (Array.isArray(structFields)) {
     for (const field of structFields) {
-      pushValue(field.type, fieldValue(field.name));
+      pushValue(field.name, field.type, fieldValue(field.name));
     }
   } else if (typeof structFields === "object") {
     for (const [key, val] of Object.entries(structFields)) {
-      pushValue(val, fieldValue(key));
+      pushValue(key, val, fieldValue(key));
     }
   }
 
