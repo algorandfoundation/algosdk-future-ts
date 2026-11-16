@@ -208,3 +208,19 @@ describe("encodeValue invalid input", () => {
     ).toThrow(/Missing field "difference" for struct Outputs/);
   });
 });
+
+describe("encodeValue struct arrays", () => {
+  const arc56 = arc56Json as unknown as ARC56Contract;
+
+  it("throws when an array of structs is not an array", () => {
+    expect(() =>
+      encodeValue(arc56, "Outputs[]", { sum: 1n, difference: 2n }),
+    ).toThrow(/Expected an array for Outputs\[\], got object/);
+  });
+
+  it("throws when a nested array of structs is not an array", () => {
+    expect(() =>
+      encodeValue(arc56, "Outputs[][]", [{ sum: 1n, difference: 2n }]),
+    ).toThrow(/Expected an array for Outputs\[\]\[\], got object/);
+  });
+});

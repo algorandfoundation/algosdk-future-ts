@@ -92,16 +92,24 @@ export function getStructForType(
   return undefined;
 }
 
-/** Apply `convert` to every leaf of a value nested `arrayDepth` arrays deep */
+/**
+ * Apply `convert` to every leaf of a value nested `arrayDepth` arrays deep,
+ * e.g. to each struct in a `Point[][]`
+ */
 function convertArrayDepth(
+  type: string,
   value: unknown,
   arrayDepth: number,
   convert: (value: unknown) => unknown,
 ): unknown {
   if (arrayDepth === 0) return convert(value);
-  if (!Array.isArray(value)) return value;
+  if (!Array.isArray(value)) {
+    throw new TypeError(
+      `Expected an array for ${type}, got ${describeValue(value)}`,
+    );
+  }
   return value.map((child) =>
-    convertArrayDepth(child, arrayDepth - 1, convert),
+    convertArrayDepth(type, child, arrayDepth - 1, convert),
   );
 }
 
@@ -170,7 +178,7 @@ export function getABIValue(
   const match = getStructForType(arc56, type);
   const def = match ? arc56.structs?.[match.name] : undefined;
   if (match && def) {
-    return convertArrayDepth(value, match.arrayDepth, (val) =>
+    return convertArrayDepth(type, value, match.arrayDepth, (val) =>
       isRecord(val)
         ? getABIValuesFromStructFieldsAndObject(arc56, def, val, match.name)
         : val,
@@ -275,7 +283,7 @@ function getDecodedValue(
   const match = getStructForType(arc56, type);
   const def = match ? arc56.structs?.[match.name] : undefined;
   if (match && def) {
-    return convertArrayDepth(value, match.arrayDepth, (val) =>
+    return convertArrayDepth(type, value, match.arrayDepth, (val) =>
       getObjectFromStructFieldsAndArray(
         arc56,
         def,
