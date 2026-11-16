@@ -124,15 +124,6 @@ export function getABIValuesFromStructFieldsAndObject(
       return;
     }
 
-    if (val === "bytes" || val === "AVMBytes" || val === "AVMString") {
-      valuesArray.push(valueToBytes(prop));
-      return;
-    }
-    if (val === "AVMUint64") {
-      valuesArray.push(algosdk.encodeUint64(valueToUint64(prop)));
-      return;
-    }
-
     valuesArray.push(getABIValue(arc56, val, prop));
   };
 
@@ -204,18 +195,6 @@ export function getObjectFromStructFieldsAndArray(
         val,
         Array.isArray(nextVal) ? nextVal : [],
       );
-      return;
-    }
-
-    if (val === "bytes" || val === "AVMString") {
-      obj[key] =
-        nextVal instanceof Uint8Array
-          ? new TextDecoder().decode(nextVal)
-          : nextVal;
-      return;
-    }
-    if (val === "AVMBytes") {
-      obj[key] = nextVal;
       return;
     }
 
