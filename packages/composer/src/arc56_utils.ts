@@ -109,8 +109,10 @@ export function getABIValuesFromStructFieldsAndObject(
   arc56: ARC56Contract,
   structFields: StructDef,
   obj: unknown,
+  structName?: string,
 ): algosdk.ABIValue[] {
   const valuesArray: algosdk.ABIValue[] = [];
+  const structLabel = structName ?? describeStructDef(structFields);
 
   const pushValue = (val: StructDef, prop: unknown) => {
     if (typeof val !== "string") {
@@ -127,28 +129,33 @@ export function getABIValuesFromStructFieldsAndObject(
       return;
     }
     if (val === "AVMUint64") {
-      valuesArray.push(
-        algosdk.encodeUint64(
-          typeof prop === "bigint"
-            ? prop
-            : typeof prop === "number" || typeof prop === "string"
-              ? BigInt(prop)
-              : 0n,
-        ),
-      );
+      valuesArray.push(algosdk.encodeUint64(valueToUint64(prop)));
       return;
     }
 
     valuesArray.push(getABIValue(arc56, val, prop));
   };
 
+  if (!isRecord(obj)) {
+    throw new TypeError(
+      `Expected an object for struct ${structLabel}, got ${describeValue(obj)}`,
+    );
+  }
+
+  const fieldValue = (key: string): unknown => {
+    if (!(key in obj) || obj[key] === undefined) {
+      throw new TypeError(`Missing field "${key}" for struct ${structLabel}`);
+    }
+    return obj[key];
+  };
+
   if (Array.isArray(structFields)) {
     for (const field of structFields) {
-      pushValue(field.type, isRecord(obj) ? obj[field.name] : undefined);
+      pushValue(field.type, fieldValue(field.name));
     }
   } else if (typeof structFields === "object") {
     for (const [key, val] of Object.entries(structFields)) {
-      pushValue(val, isRecord(obj) ? obj[key] : undefined);
+      pushValue(val, fieldValue(key));
     }
   }
 
@@ -174,7 +181,7 @@ export function getABIValue(
   if (match && def) {
     return convertArrayDepth(value, match.arrayDepth, (val) =>
       isRecord(val)
-        ? getABIValuesFromStructFieldsAndObject(arc56, def, val)
+        ? getABIValuesFromStructFieldsAndObject(arc56, def, val, match.name)
         : val,
     ) as algosdk.ABIValue;
   }
@@ -314,7 +321,29 @@ function valueToBytes(value: unknown): Uint8Array {
   if (Array.isArray(value)) {
     return new Uint8Array(value as number[]);
   }
-  return new Uint8Array();
+  throw new TypeError(
+    `Expected a string, Uint8Array or byte array, got ${describeValue(value)}`,
+  );
+}
+
+function valueToUint64(value: unknown): bigint {
+  if (typeof value === "bigint") return value;
+  if (typeof value === "number" || typeof value === "string") {
+    return BigInt(value);
+  }
+  throw new TypeError(
+    `Expected a bigint, number or numeric string for AVMUint64, got ${describeValue(value)}`,
+  );
+}
+
+function describeValue(value: unknown): string {
+  if (value === null) return "null";
+  if (Array.isArray(value)) return "array";
+  return typeof value;
+}
+
+function describeStructDef(def: StructDef): string {
+  return typeof def === "string" ? def : JSON.stringify(def);
 }
 
 /**
@@ -330,13 +359,7 @@ export function encodeValue(
     return valueToBytes(value);
   }
   if (type === "AVMUint64") {
-    const uintValue =
-      typeof value === "bigint"
-        ? value
-        : typeof value === "number" || typeof value === "string"
-          ? BigInt(value)
-          : 0n;
-    return algosdk.encodeUint64(uintValue);
+    return algosdk.encodeUint64(valueToUint64(value));
   }
 
   const abiType = algosdk.ABIType.from(getABIType(arc56, type));

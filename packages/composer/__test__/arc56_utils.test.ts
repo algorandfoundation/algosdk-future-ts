@@ -179,3 +179,32 @@ describe("encodeValue and decodeValue", () => {
     ).toEqual(value);
   });
 });
+
+describe("encodeValue invalid input", () => {
+  const arc56 = arc56Json as unknown as ARC56Contract;
+
+  it("throws for a non-numeric AVMUint64 instead of encoding zero", () => {
+    expect(() => encodeValue(arc56, "AVMUint64", { a: 1 })).toThrow(
+      /Expected a bigint, number or numeric string for AVMUint64, got object/,
+    );
+    expect(() => encodeValue(arc56, "AVMUint64", undefined)).toThrow(TypeError);
+  });
+
+  it("throws for unsupported bytes input instead of encoding empty bytes", () => {
+    expect(() => encodeValue(arc56, "AVMBytes", 123)).toThrow(
+      /Expected a string, Uint8Array or byte array, got number/,
+    );
+  });
+
+  it("throws when a struct field is missing", () => {
+    expect(() => encodeValue(arc56, "Outputs", { sum: 1n })).toThrow(
+      /Missing field "difference" for struct Outputs/,
+    );
+  });
+
+  it("throws when a struct field is explicitly undefined", () => {
+    expect(() =>
+      encodeValue(arc56, "Outputs", { sum: 1n, difference: undefined }),
+    ).toThrow(/Missing field "difference" for struct Outputs/);
+  });
+});
