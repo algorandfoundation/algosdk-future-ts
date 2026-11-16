@@ -132,7 +132,8 @@ export class ARC56Generator {
     const item = `item${level}`;
     const body = this.mapArrayDepth(item, depth - 1, convert, level + 1);
     // Parenthesize object literals so the arrow function doesn't parse them
-    // as a block body
+    // as a block body. Inlined anonymous structs are the only conversions that
+    // produce an expression starting with `{`
     return `${expr}.map((${item}) => ${body.startsWith("{") ? `(${body})` : body})`;
   }
 
