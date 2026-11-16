@@ -313,7 +313,9 @@ import { StakedInfoFromTuple } from "../contracts/clients/RetiClient";
 const stakersType = algosdk.ABIType.from(
   "(address,uint64,uint64,uint64,uint64)[200]",
 );
-const stakers = stakersType.decode(boxBytes).map(StakedInfoFromTuple);
+const stakers = (stakersType.decode(boxBytes) as algosdk.ABIValue[]).map(
+  StakedInfoFromTuple,
+);
 ```
 
 `@algosdk/transaction-composer` also exports `encodeValue` and `decodeValue`, which work with any ARC56 type by name:
