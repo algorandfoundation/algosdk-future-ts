@@ -50,6 +50,34 @@ export type Inputs = {
   };
 };
 
+// Helpers for converting ARC56 structs to and from tuple representations
+/** Convert the tuple representation of Outputs to Outputs */
+export function OutputsFromTuple(value: [uint64, uint64]): Outputs {
+  return { sum: value[0], difference: value[1] };
+}
+/** Convert Outputs to its tuple representation */
+export function OutputsToTuple(value: Outputs): [uint64, uint64] {
+  return [value.sum, value.difference];
+}
+/** Convert the tuple representation of Inputs to Inputs */
+export function InputsFromTuple(
+  value: [[uint64, uint64], [uint64, uint64]],
+): Inputs {
+  return {
+    add: { a: value[0][0], b: value[0][1] },
+    subtract: { a: value[1][0], b: value[1][1] },
+  };
+}
+/** Convert Inputs to its tuple representation */
+export function InputsToTuple(
+  value: Inputs,
+): [[uint64, uint64], [uint64, uint64]] {
+  return [
+    [value.add.a, value.add.b],
+    [value.subtract.a, value.subtract.b],
+  ];
+}
+
 export type ARC56TestReturnTypes = {
   foo: Outputs;
   optInToApplication: void;

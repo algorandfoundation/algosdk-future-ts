@@ -1,23 +1,280 @@
 import { describe, it, expect } from "vitest";
 import algosdk from "algosdk";
-import { getTypeScriptValue } from "../src/arc56_utils";
+import {
+  decodeValue,
+  encodeValue,
+  encodeMethodArgs,
+  decodeMethodReturnValue,
+  getStructForType,
+} from "../src/arc56_utils";
 import type { ARC56Contract } from "../src/types/arc56";
 import arc56Json from "../../../fixtures/ARC56Test.arc56.json";
 
-describe("getTypeScriptValue", () => {
+describe("decodeValue", () => {
   const arc56 = arc56Json as unknown as ARC56Contract;
   const values = [0n, 5n, 2n ** 53n - 1n, 2n ** 53n, 2n ** 60n, 2n ** 64n - 1n];
 
   for (const type of ["AVMUint64", "uint64"]) {
     it.each(values)(`should decode ${type} %s as bigint`, (value) => {
-      const decoded = getTypeScriptValue(
-        arc56,
-        type,
-        algosdk.encodeUint64(value),
-      );
+      const decoded = decodeValue(arc56, type, algosdk.encodeUint64(value));
 
       expect(typeof decoded).toBe("bigint");
       expect(decoded).toBe(value);
     });
   }
+});
+
+describe("encodeValue and decodeValue", () => {
+  const arc56 = arc56Json as unknown as ARC56Contract;
+
+  it("round-trips a struct by name", () => {
+    const outputs = { sum: 30n, difference: 35n };
+    const encoded = encodeValue(arc56, "Outputs", outputs);
+
+    expect(encoded).toEqual(
+      algosdk.ABIType.from("(uint64,uint64)").encode([30n, 35n]),
+    );
+    expect(decodeValue(arc56, "Outputs", encoded)).toEqual(outputs);
+  });
+
+  it("round-trips nested struct fields", () => {
+    const inputs = {
+      add: { a: 10n, b: 20n },
+      subtract: { a: 50n, b: 15n },
+    };
+    const encoded = encodeValue(arc56, "Inputs", inputs);
+
+    expect(decodeValue(arc56, "Inputs", encoded)).toEqual(inputs);
+  });
+
+  it("keeps tuple arrays as tuples even when their shape matches a struct", () => {
+    const encoded = algosdk.ABIType.from("(uint64,uint64)[]").encode([
+      [1n, 2n],
+      [3n, 4n],
+    ]);
+
+    expect(getStructForType(arc56, "(uint64,uint64)[]")).toBeUndefined();
+    expect(decodeValue(arc56, "(uint64,uint64)[]", encoded)).toEqual([
+      [1n, 2n],
+      [3n, 4n],
+    ]);
+  });
+
+  it("encodes arrays of structs from objects", () => {
+    const outputs = [
+      { sum: 1n, difference: 2n },
+      { sum: 3n, difference: 4n },
+    ];
+
+    expect(encodeValue(arc56, "Outputs[]", outputs)).toEqual(
+      algosdk.ABIType.from("(uint64,uint64)[]").encode([
+        [1n, 2n],
+        [3n, 4n],
+      ]),
+    );
+  });
+
+  it("encodes and decodes array struct types by name", () => {
+    const outputs = [
+      { sum: 1n, difference: 2n },
+      { sum: 3n, difference: 4n },
+    ];
+
+    expect(
+      decodeValue(arc56, "Outputs[]", encodeValue(arc56, "Outputs[]", outputs)),
+    ).toEqual(outputs);
+  });
+
+  it.each([
+    "((uint64,uint64),string,byte[])",
+    "((uint64,uint64),string,byte[])[]",
+    "((uint64,uint64),string,byte[])[1][]",
+  ])("preserves tuples nested in %s despite matching struct shapes", (type) => {
+    const tuple = [[1n, 2n], "hi", new Uint8Array([3, 4])];
+    const wrap = (value: unknown) =>
+      type.endsWith("[1][]")
+        ? [[value]]
+        : type.endsWith("[]")
+          ? [value]
+          : value;
+    const abiValue = wrap(tuple) as algosdk.ABIValue;
+    const value = wrap(tuple);
+    const bytes = algosdk.ABIType.from(type).encode(abiValue);
+
+    expect(decodeValue(arc56, type, bytes)).toEqual(value);
+    expect(encodeValue(arc56, type, value)).toEqual(bytes);
+    expect(
+      encodeMethodArgs(
+        arc56,
+        {
+          name: "nested",
+          args: [{ name: "value", type }],
+          returns: { type: "void" },
+          actions: { create: [], call: ["NoOp"] },
+        },
+        [value],
+      ),
+    ).toEqual([abiValue]);
+  });
+
+  it("preserves tuples inside an explicitly named struct", () => {
+    const spec: ARC56Contract = {
+      ...arc56,
+      structs: {
+        ...arc56.structs,
+        Wrapper: [{ name: "entry", type: "((uint64,uint64),string)" }],
+      },
+    };
+    const value = { entry: [[1n, 2n], "hi"] };
+    const bytes = algosdk.ABIType.from("(((uint64,uint64),string))").encode([
+      [[1n, 2n], "hi"],
+    ]);
+
+    expect(encodeValue(spec, "Wrapper", value)).toEqual(bytes);
+    expect(decodeValue(spec, "Wrapper", bytes)).toEqual(value);
+  });
+
+  it("uses explicit struct annotations for method arguments and returns", () => {
+    const method = {
+      name: "explicit",
+      args: [{ name: "value", type: "(uint64,uint64)", struct: "Outputs" }],
+      returns: { type: "(uint64,uint64)", struct: "Outputs" },
+      actions: { create: [], call: ["NoOp" as const] },
+    };
+    const spec = { ...arc56, methods: [method] };
+    const value = { sum: 1n, difference: 2n };
+    const bytes = algosdk.ABIType.from("(uint64,uint64)").encode([1n, 2n]);
+    expect(encodeMethodArgs(spec, method, [value])).toEqual([[1n, 2n]]);
+    expect(decodeMethodReturnValue(spec, "explicit", bytes)).toEqual(value);
+    const unannotated = {
+      ...method,
+      args: [{ name: "value", type: "(uint64,uint64)" }],
+      returns: { type: "(uint64,uint64)" },
+    };
+    expect(
+      decodeMethodReturnValue(
+        { ...spec, methods: [unannotated] },
+        "explicit",
+        bytes,
+      ),
+    ).toEqual([1n, 2n]);
+    expect(() => encodeValue(spec, "(uint64,uint64)", value)).toThrow();
+  });
+
+  it("round-trips explicitly named struct arrays inside struct fields", () => {
+    const spec: ARC56Contract = {
+      ...arc56,
+      structs: {
+        ...arc56.structs,
+        Wrapper: [{ name: "entries", type: "Outputs[1][]" }],
+      },
+    };
+    const value = { entries: [[{ sum: 1n, difference: 2n }]] };
+    expect(getStructForType(spec, "Outputs[1][]")).toEqual({
+      name: "Outputs",
+      arrayDepth: 2,
+    });
+    expect(
+      decodeValue(spec, "Wrapper", encodeValue(spec, "Wrapper", value)),
+    ).toEqual(value);
+  });
+});
+
+describe("encodeValue invalid input", () => {
+  const arc56 = arc56Json as unknown as ARC56Contract;
+
+  it("throws for a non-numeric AVMUint64 instead of encoding zero", () => {
+    expect(() => encodeValue(arc56, "AVMUint64", { a: 1 })).toThrow(
+      /Expected a bigint, integer or integer string for AVMUint64, got object/,
+    );
+    expect(() => encodeValue(arc56, "AVMUint64", undefined)).toThrow(TypeError);
+  });
+
+  it.each([1.5, NaN, "abc", "1.5", "", "-1"])(
+    "throws a TypeError for the non-integer AVMUint64 %j",
+    (value) => {
+      expect(() => encodeValue(arc56, "AVMUint64", value)).toThrow(
+        /Expected a bigint, integer or integer string for AVMUint64, got /,
+      );
+      expect(() => encodeValue(arc56, "AVMUint64", value)).toThrow(TypeError);
+    },
+  );
+
+  it.each([-1, -1n, 2n ** 64n, (2n ** 64n).toString()])(
+    "throws a RangeError for the out of range AVMUint64 %s",
+    (value) => {
+      expect(() => encodeValue(arc56, "AVMUint64", value)).toThrow(RangeError);
+    },
+  );
+
+  it("accepts integer strings and numbers for AVMUint64", () => {
+    expect(encodeValue(arc56, "AVMUint64", "18446744073709551615")).toEqual(
+      algosdk.encodeUint64(2n ** 64n - 1n),
+    );
+    expect(encodeValue(arc56, "AVMUint64", 5)).toEqual(
+      algosdk.encodeUint64(5n),
+    );
+  });
+
+  it("throws for unsupported bytes input instead of encoding empty bytes", () => {
+    expect(() => encodeValue(arc56, "AVMBytes", 123)).toThrow(
+      /Expected a string, Uint8Array or byte array, got number/,
+    );
+  });
+
+  it("throws when a struct field is missing", () => {
+    expect(() => encodeValue(arc56, "Outputs", { sum: 1n })).toThrow(
+      /Missing field "difference" for struct Outputs/,
+    );
+  });
+
+  it("throws when a struct field is explicitly undefined", () => {
+    expect(() =>
+      encodeValue(arc56, "Outputs", { sum: 1n, difference: undefined }),
+    ).toThrow(/Missing field "difference" for struct Outputs/);
+  });
+
+  it("names a nested anonymous struct by its path when a field is missing", () => {
+    expect(() =>
+      encodeValue(arc56, "Inputs", {
+        add: { a: 1n, b: 2n },
+        subtract: { a: 1n },
+      }),
+    ).toThrow(/^Missing field "b" for struct Inputs\.subtract$/);
+  });
+});
+
+describe("encodeValue struct arrays", () => {
+  const arc56 = arc56Json as unknown as ARC56Contract;
+
+  it.each([
+    ["Outputs", 5, "Outputs", "number"],
+    ["Outputs[]", [{ sum: 1n, difference: 2n }, "x"], "Outputs", "string"],
+    ["Inputs", { add: null, subtract: { a: 1n, b: 2n } }, "Inputs.add", "null"],
+  ])(
+    "throws when a %s struct value is neither an object nor a tuple",
+    (type, value, label, got) => {
+      expect(() => encodeValue(arc56, type, value)).toThrow(
+        `Expected an object or tuple for struct ${label}, got ${got}`,
+      );
+    },
+  );
+
+  it("still accepts tuples for structs", () => {
+    expect(encodeValue(arc56, "Outputs[]", [[1n, 2n]])).toEqual(
+      encodeValue(arc56, "Outputs[]", [{ sum: 1n, difference: 2n }]),
+    );
+  });
+
+  it("throws when an array of structs is not an array", () => {
+    expect(() =>
+      encodeValue(arc56, "Outputs[]", { sum: 1n, difference: 2n }),
+    ).toThrow(/Expected an array for Outputs\[\], got object/);
+  });
+
+  it("throws when a nested array of structs is not an array", () => {
+    expect(() =>
+      encodeValue(arc56, "Outputs[][]", [{ sum: 1n, difference: 2n }]),
+    ).toThrow(/Expected an array for Outputs\[\]\[\], got object/);
+  });
 });

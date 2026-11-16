@@ -298,3 +298,33 @@ const result = composer.execute(algod);
 const resultOfMethodOne = result.methodResults[0].returnValue as HelloWorldReturnTypes['methodOne']
 const resultOfMethodTwo = result.methodResults[1].returnValue as HelloWorldReturnTypes['methodTwo']
 ```
+
+### Struct and Value Helpers
+
+The generated client exports `StructNameFromTuple` and `StructNameToTuple` helpers for every ARC56 struct.
+
+ABI encoding doesn't include field names, so a struct only comes back as an object when it's decoded with its ARC56 struct name. Anything decoded from the plain ABI type, such as the value of a box the app spec doesn't declare as a struct or a value decoded with an `algosdk.ABIType`, is a tuple. Use `StructNameFromTuple` to turn such a tuple into the struct object, and `StructNameToTuple` for the reverse.
+
+```ts
+import algosdk from "algosdk";
+import { StakedInfoFromTuple } from "../contracts/clients/RetiClient";
+
+// The box holds StakedInfo[200], but is read as raw bytes
+const stakersType = algosdk.ABIType.from(
+  "(address,uint64,uint64,uint64,uint64)[200]",
+);
+const stakers = (stakersType.decode(boxBytes) as algosdk.ABIValue[]).map(
+  StakedInfoFromTuple,
+);
+```
+
+`@algosdk/transaction-composer` also exports `encodeValue` and `decodeValue`, which work with any ARC56 type by name:
+
+```ts
+import { decodeValue, encodeValue } from "@algosdk/transaction-composer";
+
+const encoded = encodeValue(APP_SPEC, "StakedInfo", stakedInfo);
+const decoded = decodeValue(APP_SPEC, "StakedInfo", encoded);
+```
+
+Struct objects are used for named struct types and ARC56 struct annotations. Use the generated `StructNameFromTuple` and `StructNameToTuple` helpers to convert between tuples and struct objects.
