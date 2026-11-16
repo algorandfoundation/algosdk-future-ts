@@ -247,6 +247,25 @@ describe("encodeValue invalid input", () => {
 describe("encodeValue struct arrays", () => {
   const arc56 = arc56Json as unknown as ARC56Contract;
 
+  it.each([
+    ["Outputs", 5, "Outputs", "number"],
+    ["Outputs[]", [{ sum: 1n, difference: 2n }, "x"], "Outputs", "string"],
+    ["Inputs", { add: null, subtract: { a: 1n, b: 2n } }, "Inputs.add", "null"],
+  ])(
+    "throws when a %s struct value is neither an object nor a tuple",
+    (type, value, label, got) => {
+      expect(() => encodeValue(arc56, type, value)).toThrow(
+        `Expected an object or tuple for struct ${label}, got ${got}`,
+      );
+    },
+  );
+
+  it("still accepts tuples for structs", () => {
+    expect(encodeValue(arc56, "Outputs[]", [[1n, 2n]])).toEqual(
+      encodeValue(arc56, "Outputs[]", [{ sum: 1n, difference: 2n }]),
+    );
+  });
+
   it("throws when an array of structs is not an array", () => {
     expect(() =>
       encodeValue(arc56, "Outputs[]", { sum: 1n, difference: 2n }),

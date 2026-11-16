@@ -126,14 +126,7 @@ export function getABIValuesFromStructFieldsAndObject(
     if (typeof val !== "string") {
       // Anonymous nested structs are labelled by their path, e.g. `Inputs.add`
       valuesArray.push(
-        isRecord(prop)
-          ? getABIValuesFromStructFieldsAndObject(
-              arc56,
-              val,
-              prop,
-              `${structLabel}.${key}`,
-            )
-          : (prop as algosdk.ABIValue),
+        structToABIValue(arc56, val, prop, `${structLabel}.${key}`),
       );
       return;
     }
@@ -167,6 +160,22 @@ export function getABIValuesFromStructFieldsAndObject(
   return valuesArray;
 }
 
+/** Encode a struct given as an object, passing tuples through unchanged */
+function structToABIValue(
+  arc56: ARC56Contract,
+  def: StructDef,
+  value: unknown,
+  label: string,
+): algosdk.ABIValue {
+  if (isRecord(value)) {
+    return getABIValuesFromStructFieldsAndObject(arc56, def, value, label);
+  }
+  if (Array.isArray(value)) return value as algosdk.ABIValue;
+  throw new TypeError(
+    `Expected an object or tuple for struct ${label}, got ${describeValue(value)}`,
+  );
+}
+
 export function getABIValue(
   arc56: ARC56Contract,
   type: string,
@@ -185,9 +194,7 @@ export function getABIValue(
   const def = match ? arc56.structs?.[match.name] : undefined;
   if (match && def) {
     return convertArrayDepth(type, value, match.arrayDepth, (val) =>
-      isRecord(val)
-        ? getABIValuesFromStructFieldsAndObject(arc56, def, val, match.name)
-        : val,
+      structToABIValue(arc56, def, val, match.name),
     ) as algosdk.ABIValue;
   }
 
