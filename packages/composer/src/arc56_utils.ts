@@ -181,15 +181,6 @@ export function getABIValue(
   type: string,
   value: unknown,
 ): algosdk.ABIValue {
-  if (
-    type === "bytes" ||
-    type === "AVMBytes" ||
-    type === "AVMString" ||
-    type === "AVMUint64"
-  ) {
-    return value as algosdk.ABIValue;
-  }
-
   const match = getStructForType(arc56, type);
   const def = match ? arc56.structs?.[match.name] : undefined;
   if (match && def) {
