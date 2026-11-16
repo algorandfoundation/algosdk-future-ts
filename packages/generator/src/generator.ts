@@ -130,12 +130,10 @@ export class ARC56Generator {
   ): string {
     if (depth === 0) return convert(expr);
     const item = `item${level}`;
-    return `${expr}.map((${item}) => ${this.mapArrayDepth(
-      item,
-      depth - 1,
-      convert,
-      level + 1,
-    )})`;
+    const body = this.mapArrayDepth(item, depth - 1, convert, level + 1);
+    // Parenthesize object literals so the arrow function doesn't parse them
+    // as a block body
+    return `${expr}.map((${item}) => ${body.startsWith("{") ? `(${body})` : body})`;
   }
 
   private getTypeConversion(

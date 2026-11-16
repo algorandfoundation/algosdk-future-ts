@@ -350,6 +350,53 @@ describe("ABI bytes", () => {
     );
   });
 
+  it("inlines conversions for nested arrays of anonymous structs", () => {
+    const arc56 = contract();
+    arc56.structs = {
+      "Point Pair": [
+        { name: "x", type: "uint64" },
+        { name: "y", type: "uint64" },
+      ],
+      Wrapper: [{ name: "grid", type: "Point Pair[][]" }],
+    };
+    const helpers = new ARC56Generator(arc56)
+      .getStructTupleHelperLines()
+      .join("\n");
+    expect(helpers).not.toContain("Point PairFromTuple");
+    expect(helpers).toContain(
+      "value[0].map((item0) => item0.map((item1) => ({ x: item1[0], y: item1[1] })))",
+    );
+    expect(helpers).toContain(
+      "value.grid.map((item0) => item0.map((item1) => [item1.x, item1.y]))",
+    );
+
+    const { outputText } = ts.transpileModule(helpers, {
+      compilerOptions: { module: ts.ModuleKind.CommonJS },
+    });
+    const exports: Record<string, (value: unknown) => unknown> = {};
+    runInNewContext(outputText, { exports });
+    const tuple = [
+      [
+        [
+          [1n, 2n],
+          [3n, 4n],
+        ],
+        [[5n, 6n]],
+      ],
+    ];
+    const value = {
+      grid: [
+        [
+          { x: 1n, y: 2n },
+          { x: 3n, y: 4n },
+        ],
+        [{ x: 5n, y: 6n }],
+      ],
+    };
+    expect(exports.WrapperFromTuple?.(tuple)).toEqual(value);
+    expect(exports.WrapperToTuple?.(value)).toEqual(tuple);
+  });
+
   it.each(["global", "local", "box"] as const)(
     "decodes %s state keys and map values as Uint8Array",
     async (storage) => {
