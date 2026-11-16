@@ -301,12 +301,19 @@ const resultOfMethodTwo = result.methodResults[1].returnValue as HelloWorldRetur
 
 ### Struct and Value Helpers
 
-The generated client exports `StructNameFromTuple` and `StructNameToTuple` helpers for every ARC56 struct. These are useful when a box or another API surfaces a tuple instead of the struct object.
+The generated client exports `StructNameFromTuple` and `StructNameToTuple` helpers for every ARC56 struct.
+
+ABI encoding doesn't include field names, so a struct only comes back as an object when it's decoded with its ARC56 struct name. Anything decoded from the plain ABI type, such as the value of a box the app spec doesn't declare as a struct or a value decoded with an `algosdk.ABIType`, is a tuple. Use `StructNameFromTuple` to turn such a tuple into the struct object, and `StructNameToTuple` for the reverse.
 
 ```ts
+import algosdk from "algosdk";
 import { StakedInfoFromTuple } from "../contracts/clients/RetiClient";
 
-const stakers = rawStakers.map(StakedInfoFromTuple);
+// The box holds StakedInfo[200], but is read as raw bytes
+const stakersType = algosdk.ABIType.from(
+  "(address,uint64,uint64,uint64,uint64)[200]",
+);
+const stakers = stakersType.decode(boxBytes).map(StakedInfoFromTuple);
 ```
 
 `@algosdk/transaction-composer` also exports `encodeValue` and `decodeValue`, which work with any ARC56 type by name:
