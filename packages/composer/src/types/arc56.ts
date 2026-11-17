@@ -24,11 +24,6 @@ export interface StructField {
   type: ABIType | StructField[];
 }
 
-/** Legacy mapping of named structs to field types */
-export interface StructFields {
-  [fieldName: string]: ABIType | StructFields;
-}
-
 /** Describes a single key in app storage */
 export interface StorageKey {
   /** Description of what this storage key holds */
@@ -201,7 +196,7 @@ export interface ARC56Contract {
     };
   };
   /** Named structs used by the application. Each struct field appears in the same order as ABI encoding. */
-  structs?: { [structName: StructName]: StructField[] | StructFields };
+  structs?: { [structName: StructName]: StructField[] };
   /** All of the methods that the contract implements */
   methods: Method[];
   state?: {

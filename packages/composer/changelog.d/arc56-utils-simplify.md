@@ -1,3 +1,7 @@
-## Chores
+## Breaking Changes
 
-- Simplify the internal ARC-56 helpers in `arc56_utils`. `getABIType` and `getABIValue` now also accept inline struct definitions. A struct whose name matches a native type (such as `AVMString` or `void`) is now treated as that struct.
+- Remove legacy `{ fieldName: type }` struct definitions and the `StructFields` type. Define all ARC-56 structs, including nested structs, as ordered `{ name, type }[]` field arrays.
+
+## Features
+
+- Accept inline struct definitions in `getABIType` and `getABIValue`, while preserving native AVM value handling and `void` method returns when struct names collide.

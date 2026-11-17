@@ -1,33 +1,17 @@
 import algosdk from "algosdk";
-import type {
-  ARC56Contract,
-  Method,
-  StructField,
-  StructFields,
-} from "./types/arc56.ts";
+import type { ARC56Contract, Method, StructField } from "./types/arc56.ts";
 
 export function isRecord(val: unknown): val is Record<string, unknown> {
   return typeof val === "object" && val !== null && !Array.isArray(val);
 }
 
-export type StructDef = StructFields | StructField["type"];
-
-/**
- * The name and type of each field of a struct definition. A field array is
- * listed in declaration order; a legacy struct map in its own key order.
- */
-function structEntries(structFields: StructDef): [string, StructDef][] {
-  if (Array.isArray(structFields)) {
-    return structFields.map((field) => [field.name, field.type]);
-  }
-  return typeof structFields === "object" ? Object.entries(structFields) : [];
-}
+export type StructDef = StructField["type"];
 
 /** The fields of a struct type, whether defined inline or by name */
 function getStructDef(
   arc56: ARC56Contract,
   type: StructDef,
-): StructDef | undefined {
+): StructField[] | undefined {
   // An inline struct definition
   if (typeof type !== "string") return type;
   return arc56.structs?.[type];
@@ -35,13 +19,11 @@ function getStructDef(
 
 export function getABITypeFromStructFields(
   arc56: ARC56Contract,
-  structFields: StructDef,
+  structFields: StructField[],
 ): string {
   // Join rather than reformatting a JSON array, so that the square brackets of
   // a sized element type such as `byte[96]` survive
-  const types = structEntries(structFields).map(([, type]) =>
-    getABIType(arc56, type),
-  );
+  const types = structFields.map(({ type }) => getABIType(arc56, type));
   return `(${types.join(",")})`;
 }
 
@@ -52,25 +34,31 @@ export function getABIType(arc56: ARC56Contract, type: StructDef): string {
 
 export function getABIValuesFromStructFieldsAndObject(
   arc56: ARC56Contract,
-  structFields: StructDef,
+  structFields: StructField[],
   obj: unknown,
 ): algosdk.ABIValue[] {
-  return structEntries(structFields).map(([key, type]) =>
-    getABIValue(arc56, type, isRecord(obj) ? obj[key] : undefined),
+  return structFields.map(({ name, type }) =>
+    getABIValue(arc56, type, isRecord(obj) ? obj[name] : undefined),
   );
 }
 
 /**
- * Turn an argument object into the ABI value to encode. Only names listed in
- * `arc56.structs` are treated as structs, so a native AVM type such as
- * `AVMString` or `bytes` passes through untouched (as it could only be
- * mistaken for a struct if the contract defined one under that name).
+ * Turn an argument object into the ABI value to encode. Native AVM types
+ * always pass through untouched, even when a struct has the same name.
  */
 export function getABIValue(
   arc56: ARC56Contract,
   type: StructDef,
   value: unknown,
 ): algosdk.ABIValue {
+  if (
+    type === "bytes" ||
+    type === "AVMBytes" ||
+    type === "AVMString" ||
+    type === "AVMUint64"
+  ) {
+    return value as algosdk.ABIValue;
+  }
   const struct = getStructDef(arc56, type);
   return struct && isRecord(value)
     ? getABIValuesFromStructFieldsAndObject(arc56, struct, value)
@@ -79,15 +67,15 @@ export function getABIValue(
 
 export function getObjectFromStructFieldsAndArray(
   arc56: ARC56Contract,
-  structFields: StructDef,
+  structFields: StructField[],
   valuesArray: unknown[],
 ): Record<string, unknown> {
   return Object.fromEntries(
-    structEntries(structFields).map(([key, type], i) => {
+    structFields.map(({ name, type }, i) => {
       const struct = getStructDef(arc56, type);
       const val = valuesArray[i];
       return [
-        key,
+        name,
         struct
           ? getObjectFromStructFieldsAndArray(
               arc56,
@@ -239,10 +227,13 @@ export function getAbiMethodFromDefinition(
         desc: a.desc,
       })),
       returns: {
-        type: getABIType(
-          arc56,
-          arc56Method.returns.struct ?? arc56Method.returns.type,
-        ),
+        type:
+          arc56Method.returns.type === "void"
+            ? "void"
+            : getABIType(
+                arc56,
+                arc56Method.returns.struct ?? arc56Method.returns.type,
+              ),
         desc: arc56Method.returns.desc,
       },
     });

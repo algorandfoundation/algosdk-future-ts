@@ -2,7 +2,6 @@ import algosdk from "algosdk";
 import {
   getAbiMethodFromDefinition,
   type ARC56Contract,
-  type StructFields,
   type StructField,
   type Method,
 } from "@algosdk/transaction-composer";
@@ -83,28 +82,14 @@ export class ARC56Generator {
       .replaceAll(")", "]");
   }
 
-  private structDefToTsType(
-    def: StructField[] | StructFields | string,
-  ): string {
-    if (Array.isArray(def)) {
-      const fields = def.map((f: StructField) => {
-        const fieldType = Array.isArray(f.type)
-          ? this.structDefToTsType(f.type)
-          : this.getTypeScriptType(f.type);
-        return `  ${f.name}: ${fieldType};`;
-      });
-      return `{\n${fields.join("\n")}\n}`;
-    } else if (typeof def === "object") {
-      const fields = Object.entries(def).map(([key, val]) => {
-        const fieldType =
-          typeof val === "object"
-            ? this.structDefToTsType(val)
-            : this.getTypeScriptType(val);
-        return `  ${key}: ${fieldType};`;
-      });
-      return `{\n${fields.join("\n")}\n}`;
-    }
-    return this.getTypeScriptType(def);
+  private structDefToTsType(def: StructField[]): string {
+    const fields = def.map(({ name, type }) => {
+      const fieldType = Array.isArray(type)
+        ? this.structDefToTsType(type)
+        : this.getTypeScriptType(type);
+      return `  ${name}: ${fieldType};`;
+    });
+    return `{\n${fields.join("\n")}\n}`;
   }
 
   getABITypeLines(): string[] {
@@ -188,20 +173,11 @@ export class ARC56Generator {
       });
     }
 
-    const pushStructFields = (
-      fields: StructField[] | StructFields | StructField["type"],
-    ) => {
-      if (Array.isArray(fields)) {
-        fields.forEach((sf) => {
-          if (typeof sf.type === "string") pushType(sf.type);
-          else pushStructFields(sf.type);
-        });
-      } else if (typeof fields === "object") {
-        Object.values(fields).forEach((val) => {
-          if (typeof val === "string") pushType(val);
-          else pushStructFields(val);
-        });
-      }
+    const pushStructFields = (fields: StructField[]) => {
+      fields.forEach(({ type }) => {
+        if (typeof type === "string") pushType(type);
+        else pushStructFields(type);
+      });
     };
 
     Object.values(this.arc56.structs ?? {}).forEach((sf) => {
