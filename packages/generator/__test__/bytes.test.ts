@@ -89,27 +89,22 @@ describe("ABI bytes", () => {
     },
   );
 
-  it.each(["array", "object"] as const)(
+  it.each(["named", "inline"] as const)(
     "decodes byte fields in nested %s structs",
     (format) => {
       const arc56 = contract("(byte,byte[],(byte[2],(byte[],uint64)))");
-      arc56.structs =
-        format === "array"
-          ? {
-              Inner: [
-                { name: "fixed", type: "byte[2]" },
-                { name: "tuple", type: "(byte[],uint64)" },
-              ],
-              Output: [
-                { name: "single", type: "byte" },
-                { name: "dynamic", type: "byte[]" },
-                { name: "nested", type: "Inner" },
-              ],
-            }
-          : {
-              Inner: { fixed: "byte[2]", tuple: "(byte[],uint64)" },
-              Output: { single: "byte", dynamic: "byte[]", nested: "Inner" },
-            };
+      const inner = [
+        { name: "fixed", type: "byte[2]" },
+        { name: "tuple", type: "(byte[],uint64)" },
+      ];
+      arc56.structs = {
+        Inner: inner,
+        Output: [
+          { name: "single", type: "byte" },
+          { name: "dynamic", type: "byte[]" },
+          { name: "nested", type: format === "named" ? "Inner" : inner },
+        ],
+      };
       const method = arc56.methods[0];
       if (!method) throw new Error("Expected method");
       method.returns.struct = "Output";
